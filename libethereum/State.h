@@ -253,7 +253,8 @@ public:
 
 	/// Commit all changes waiting in the address cache to the DB.
 	/// @param _commitBehaviour whether or not to remove empty accounts during commit.
-	void commit(CommitBehaviour _commitBehaviour);
+	// void commit(CommitBehaviour _commitBehaviour); // TODO temp
+	virtual void commit(CommitBehaviour _commitBehaviour); // TODO temp
 
 	/// Resets any uncommitted changes to the cache.
 	void setRoot(h256 const& _root);
@@ -263,17 +264,20 @@ public:
 	u256 const& requireAccountStartNonce() const;
 	void noteAccountStartNonce(u256 const& _actual);
 
-private:
+// private: // TODO temp
+protected: // TODO temp
 	/// Turns all "touched" empty accounts into non-alive accounts.
 	void removeEmptyAccounts();
 
 	/// @returns the account at the given address or a null pointer if it does not exist.
 	/// The pointer is valid until the next access to the state or account.
-	Account const* account(Address const& _a, bool _requireCode = false) const;
+	// Account const* account(Address const& _a, bool _requireCode = false) const; // TODO temp
+	virtual Account const* account(Address const& _a, bool _requireCode = false) const; // TODO temp
 
 	/// @returns the account at the given address or a null pointer if it does not exist.
 	/// The pointer is valid until the next access to the state or account.
-	Account* account(Address const& _a, bool _requireCode = false);
+	// Account* account(Address const& _a, bool _requireCode = false); // TODO temp
+	virtual Account* account(Address const& _a, bool _requireCode = false); // TODO temp
 
 	/// Purges non-modified entries in m_cache if it grows too large.
 	void clearCacheIfTooLarge() const;

@@ -19,7 +19,8 @@
 #pragma once
 
 #include <functional>
-#include <json/json.h>
+// #include <json/json.h> // TODO temp
+#include "deps/jsoncpp/include/json/json.h" // TODO temp
 #include <libdevcore/Log.h>
 #include <libevmcore/Instruction.h>
 #include <libethcore/Common.h>
@@ -203,7 +204,8 @@ public:
 	/// object invalid so no further changes should be made to it.
 	AccountRevertLog takeRevertLog() { return std::move(m_revertLog); }
 
-private:
+private: // TODO temp
+// protected: // TODO temp
 	State& m_s;							///< The state to which this operation/transaction is applied.
 	// TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
 	EnvInfo m_envInfo;					///< Information on the runtime environment.
