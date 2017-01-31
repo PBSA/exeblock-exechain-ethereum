@@ -177,17 +177,17 @@ public:
 
 	/// Get an account's balance.
 	/// @returns 0 if the address has never been used.
-	u256 balance(Address const& _id) const;
+	virtual u256 balance(Address const& _id) const;
 
 	/// Add some amount to balance.
 	/// Will initialise the address if it has never been used.
-	void addBalance(Address const& _id, u256 const& _amount);
+	virtual void addBalance(Address const& _id, u256 const& _amount);
 
 	/** Subtract some amount from balance.
 	 * @throws NotEnoughCash if balance of @a _id is less than @a _value (or has never been used).
 	 * @note We use bigint here as we don't want any accidental problems with negative numbers.
 	 */
-	void subBalance(Address const& _id, bigint const& _value);
+	virtual void subBalance(Address const& _id, bigint const& _value);
 
 	/**
 	 * @brief Transfers "the balance @a _value between two accounts.
@@ -208,7 +208,7 @@ public:
 	void setStorage(Address const& _contract, u256 const& _location, u256 const& _value) { m_cache[_contract].setStorage(_location, _value); }
 
 	/// Create a contract at the given address (with unset code and unchanged balance).
-	void createContract(Address const& _address);
+	virtual void createContract(Address const& _address);
 
 	/// Sets the code of the account. Must only be called during / after contract creation.
 	void setCode(Address const& _address, bytes&& _code) { m_cache[_address].setCode(std::move(_code)); }
@@ -246,7 +246,7 @@ public:
 
 	/// Get the account nonce -- the number of transactions it has sent.
 	/// @returns 0 if the address has never been used.
-	u256 getNonce(Address const& _addr) const;
+	virtual u256 getNonce(Address const& _addr) const;
 
 	/// The hash of the root of our state tree.
 	h256 rootHash() const { return m_state.root(); }
