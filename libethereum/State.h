@@ -202,7 +202,7 @@ public:
 
 	/// Get the value of a storage position of an account.
 	/// @returns 0 if no account exists at that address.
-	u256 storage(Address const& _contract, u256 const& _memory) const;
+	virtual u256 storage(Address const& _contract, u256 const& _memory) const;
 
 	/// Set the value of a storage position of an account.
 	void setStorage(Address const& _contract, u256 const& _location, u256 const& _value) { m_cache[_contract].setStorage(_location, _value); }
