@@ -238,7 +238,7 @@ public:
 	size_t codeSize(Address const& _contract) const;
 
 	/// Increament the account nonce.
-	void incNonce(Address const& _id);
+	virtual void incNonce(Address const& _id);
 
 	/// Set the account nonce to the given value. Is used to revert account
 	/// changes.
@@ -246,7 +246,7 @@ public:
 
 	/// Get the account nonce -- the number of transactions it has sent.
 	/// @returns 0 if the address has never been used.
-	u256 getNonce(Address const& _addr) const;
+	virtual u256 getNonce(Address const& _addr) const;
 
 	/// The hash of the root of our state tree.
 	h256 rootHash() const { return m_state.root(); }
