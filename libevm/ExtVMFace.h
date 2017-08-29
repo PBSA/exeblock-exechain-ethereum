@@ -162,6 +162,8 @@ struct CallParameters
 	bytesConstRef data;
 	bytesRef out;
 	OnOpFunc onOp;
+
+	u256 idAsset;
 };
 
 class EnvInfo
@@ -231,7 +233,7 @@ public:
 	ExtVMFace() = default;
 
 	/// Full constructor.
-	ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash, unsigned _depth);
+	ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash, unsigned _depth, u256 _idAsset = u256(0));
 
 	virtual ~ExtVMFace() = default;
 
@@ -295,6 +297,8 @@ public:
 	h256 codeHash;				///< SHA3 hash of the executing code
 	SubState sub;				///< Sub-band VM state (suicides, refund counter, logs).
 	unsigned depth = 0;			///< Depth of the present call.
+
+	u256 idAsset;
 };
 
 }

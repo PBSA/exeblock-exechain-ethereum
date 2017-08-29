@@ -202,7 +202,7 @@ namespace eth
 			&&GASPRICE,  \
 			&&EXTCODESIZE,  \
 			&&EXTCODECOPY,  \
-			&&INVALID,  \
+			&&IDASSET,	\
 			&&INVALID,  \
 			&&INVALID,  \
 			&&BLOCKHASH,     /* 40, */  \
