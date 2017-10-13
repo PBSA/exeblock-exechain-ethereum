@@ -255,6 +255,7 @@ bool Executive::call(Address _receiveAddress, Address _senderAddress, u256 _valu
 
 bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address const& _origin)
 {
+	m_s.saveStackSize();
 	// Always remember the sender, needed for revert.
 	m_revertLog.caller = _p.senderAddress;
 
@@ -309,6 +310,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
 bool Executive::create(Address _sender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _init, Address _origin)
 {
+	m_s.saveStackSize();
 	m_revertLog.isCreation = true;
 
 	// Always remember the sender, needed for revert.
@@ -422,6 +424,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 			clog(StateSafeExceptions) << "Safe VM Exception. " << diagnostic_information(_e);
 			m_gas = 0;
 			m_excepted = toTransactionException(_e);
+			m_s.revertStack();
 			revert();
 		}
 		catch (Exception const& _e)
@@ -499,7 +502,8 @@ void revertAccountChanges(State& _state, AccountRevertLog const& _changes)
 		// FIXME: In case of CREATE, not need to revert transfer and storage,
 		// as we are going to kill the whole account.
 		// TODO: Split transfer on sender and receiver parts.
-		_state.transferBalance(_changes.address, _changes.caller, _changes.transfer);
+		_state.subBalance(_changes.address, _changes.transfer); 
+		_state.addBalance(_changes.caller, _changes.transfer);
 	}
 
 	// Revert nonce if dumped.

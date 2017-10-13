@@ -116,7 +116,7 @@ public:
 		KeepEmptyAccounts,
 		RemoveEmptyAccounts
 	};
-
+	
 	/// Default constructor; creates with a blank database prepopulated with the genesis block.
 	explicit State(u256 const& _accountStartNonce): State(_accountStartNonce, OverlayDB(), BaseState::Empty) {}
 
@@ -195,7 +195,7 @@ public:
 	 * @param _to Account to which @a _value will be added.
 	 * @param _value Amount to be transferred.
 	 */
-	void transferBalance(Address const& _from, Address const& _to, u256 const& _value) { subBalance(_from, _value); addBalance(_to, _value); }
+	virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value) { subBalance(_from, _value); addBalance(_to, _value); }
 
 	/// Get the root of the storage of an account.
 	h256 storageRoot(Address const& _contract) const;
@@ -254,7 +254,15 @@ public:
 	/// Commit all changes waiting in the address cache to the DB.
 	/// @param _commitBehaviour whether or not to remove empty accounts during commit.
 	// void commit(CommitBehaviour _commitBehaviour); // TODO temp
-	virtual void commit(CommitBehaviour _commitBehaviour); // TODO temp
+	///////////////////////////////////////////////////////////////// TODO temp   
+	virtual void commit(CommitBehaviour _commitBehaviour); 
+	
+	virtual void saveStackSize() {}
+	
+	virtual void revertStack() {}
+
+	virtual void publishContractTransfers() {}
+	/////////////////////////////////////////////////////////////////
 
 	/// Resets any uncommitted changes to the cache.
 	void setRoot(h256 const& _root);
