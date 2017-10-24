@@ -69,6 +69,7 @@ const std::map<std::string,  Instruction> dev::eth::c_instructions =
 	{ "EXTCODESIZE", Instruction::EXTCODESIZE },
 	{ "EXTCODECOPY", Instruction::EXTCODECOPY },
 	{ "BLOCKHASH", Instruction::BLOCKHASH },
+	{ "PROPERTY", Instruction::PROPERTY }, // TODO temp
 	{ "COINBASE", Instruction::COINBASE },
 	{ "TIMESTAMP", Instruction::TIMESTAMP },
 	{ "NUMBER", Instruction::NUMBER },
@@ -217,6 +218,7 @@ static const std::map<Instruction,  InstructionInfo> c_instructionInfo =
 	{ Instruction::EXTCODESIZE,  { "EXTCODESIZE",    0,     1,    1,  false,       Tier::Special } },
 	{ Instruction::EXTCODECOPY,  { "EXTCODECOPY",    0,     4,    0,  true,        Tier::Special } },
 	{ Instruction::BLOCKHASH,    { "BLOCKHASH",      0,     1,    1,  false,       Tier::Ext } },
+	{ Instruction::PROPERTY,     { "PROPERTY",       0,     2,    1,  false,       Tier::Special } }, // TODO temp
 	{ Instruction::COINBASE,     { "COINBASE",       0,     0,    1,  false,       Tier::Base } },
 	{ Instruction::TIMESTAMP,    { "TIMESTAMP",      0,     0,    1,  false,       Tier::Base } },
 	{ Instruction::NUMBER,       { "NUMBER",         0,     0,    1,  false,       Tier::Base } },

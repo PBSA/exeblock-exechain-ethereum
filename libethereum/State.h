@@ -262,6 +262,8 @@ public:
 	virtual void revertStack() {}
 
 	virtual void publishContractTransfers() {}
+
+	virtual bool getObjectProperty(const std::string& location, dev::bytes& result) { if(location.empty() || result.size() == 0) return false; return false; };
 	/////////////////////////////////////////////////////////////////
 
 	/// Resets any uncommitted changes to the cache.

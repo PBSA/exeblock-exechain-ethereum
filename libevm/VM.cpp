@@ -26,7 +26,6 @@ using namespace std;
 using namespace dev;
 using namespace dev::eth;
 
-
 uint64_t VM::memNeed(u256 _offset, u256 _size)
 {
 	return toUint64(_size ? u512(_offset) + _size : u512(0));
@@ -713,6 +712,48 @@ void VM::interpretCases()
 			*m_sp = (u256)m_ext->blockHash(*m_sp);
 			++m_pc;
 		CASE_END
+
+/////////////////////////////////////////////////// // TODO temp
+		CASE_BEGIN(PROPERTY)
+			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+			m_newMemSize = memNeed(*m_sp, *(m_sp - 1));
+			updateMem();
+			ON_OP();
+			updateIOGas();
+
+			// std::cout << toHex(m_mem) << std::endl;
+
+			uint64_t slotSize = 32;
+			uint64_t inOff = (uint64_t)*m_sp--;
+			uint64_t inSize = (uint64_t)*m_sp--;
+
+			if(!m_ext->getObjectProperty(bytesConstRef(m_mem.data() + inOff, inSize).toString(), callMethodResult)){
+				throwBadInstruction();
+			}
+
+			u256 offset = u256(h256(bytes(m_mem.begin() + 64, m_mem.begin() + 64 + slotSize)));
+			m_mem.erase(m_mem.begin() + uint64_t(offset), m_mem.end());
+
+			size_t dataSize = callMethodResult.size();
+			size_t count = callMethodResult.size() < slotSize ? slotSize - callMethodResult.size() : slotSize - (callMethodResult.size() % slotSize);
+			callMethodResult.insert(callMethodResult.end(), count, 0x00);
+
+			h256 newOffsetTemp(u256(uint64_t(offset) + uint64_t(32) + uint64_t(callMethodResult.size())));
+			std::memcpy(m_mem.data() + 64, newOffsetTemp.asBytes().data(), newOffsetTemp.asBytes().size());
+
+			m_newMemSize = memNeed(offset, u256(slotSize + callMethodResult.size()));
+			updateMem();
+
+			h256 sizeTemp = h256(u256(dataSize));
+			std::memcpy(m_mem.data() + uint64_t(offset), sizeTemp.asBytes().data(), sizeTemp.asBytes().size());
+			std::memcpy(m_mem.data() + uint64_t(offset + slotSize), callMethodResult.data(), callMethodResult.size());
+			callMethodResult.clear();
+
+			*++m_sp = offset;
+			++m_pc;
+
+		CASE_END
+///////////////////////////////////////////////////
 
 		CASE_BEGIN(COINBASE)
 			ON_OP();

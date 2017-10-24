@@ -211,6 +211,7 @@ namespace eth
 			&&NUMBER,  \
 			&&DIFFICULTY,  \
 			&&GASLIMIT,  \
+			&&PROPERTY,  \
 			&&JUMPTO,  \
 			&&JUMPIF,  \
 			&&JUMPV,  \
@@ -219,7 +220,6 @@ namespace eth
 			&&RETURNSUB,  \
 			&&BEGINSUB,  \
 			&&BEGINDATA,  \
-			&&INVALID,  \
 			&&INVALID,  \
 			&&POP,           /* 50, */  \
 			&&MLOAD,  \

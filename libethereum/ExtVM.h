@@ -91,6 +91,8 @@ public:
 
 	State const& state() const { return m_s; }
 
+	bool getObjectProperty(const std::string& location, dev::bytes& result) { return m_s.getObjectProperty(location, result); }; // TODO temp
+
 private:
 	State& m_s;  ///< A reference to the base state.
 	SealEngineFace const& m_sealEngine;

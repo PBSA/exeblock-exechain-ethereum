@@ -280,6 +280,8 @@ public:
 	/// Return the EVM gas-price schedule for this execution context.
 	virtual EVMSchedule const& evmSchedule() const { return DefaultSchedule; }
 
+	virtual bool getObjectProperty(const std::string& location, dev::bytes& result) { if(location.empty() || result.size() == 0) return false; return false; }; // TODO temp
+
 private:
 	EnvInfo const& m_envInfo;
 
