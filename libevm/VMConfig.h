@@ -202,7 +202,7 @@ namespace eth
 			&&GASPRICE,  \
 			&&EXTCODESIZE,  \
 			&&EXTCODECOPY,  \
-			&&INVALID,  \
+			&&INVALID, \
 			&&INVALID,  \
 			&&INVALID,  \
 			&&BLOCKHASH,     /* 40, */  \
@@ -211,6 +211,7 @@ namespace eth
 			&&NUMBER,  \
 			&&DIFFICULTY,  \
 			&&GASLIMIT,  \
+			&&IDASSET,	\
 			&&JUMPTO,  \
 			&&JUMPIF,  \
 			&&JUMPV,  \
@@ -219,7 +220,6 @@ namespace eth
 			&&RETURNSUB,  \
 			&&BEGINSUB,  \
 			&&BEGINDATA,  \
-			&&INVALID,  \
 			&&INVALID,  \
 			&&POP,           /* 50, */  \
 			&&MLOAD,  \

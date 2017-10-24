@@ -81,6 +81,7 @@ enum class Instruction: uint8_t
 	NUMBER,             ///< get the block's number
 	DIFFICULTY,         ///< get the block's difficulty
 	GASLIMIT,           ///< get the block's gas limit
+	IDASSET,
 	
 	JUMPTO = 0x4a,      ///< alter the program counter to a jumpdest
 	JUMPIF,             ///< conditionally alter the program counter

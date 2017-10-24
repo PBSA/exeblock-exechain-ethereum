@@ -157,6 +157,10 @@ public:
 	/// Get the fee associated for a transaction with the given data.
 	static bigint gasRequired(bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es, u256 const& _gas = 0);
 
+	void setIdAsset(u256 _idAsset) { m_idAsset = _idAsset; };
+	
+	u256 getIdAsset() { return m_idAsset; }
+
 protected:
 	/// Type of transaction.
 	enum Type
@@ -175,6 +179,8 @@ protected:
 	bytes m_data;						///< The data associated with the transaction, or the initialiser if it's a creation transaction.
 	SignatureStruct m_vrs;				///< The signature of the transaction. Encodes the sender.
 	int m_chainId = -4;					///< EIP155 value for calculating transaction hash https://github.com/ethereum/EIPs/issues/155
+
+	u256 m_idAsset;
 
 	mutable h256 m_hashWith;			///< Cached hash of transaction with signature.
 	mutable Address m_sender;			///< Cached sender, determined from signature.
