@@ -611,14 +611,6 @@ void VM::interpretCases()
 			++m_pc;
 		CASE_END
 
-		CASE_BEGIN(IDASSET)
-			ON_OP();
-			updateIOGas();
-
-			*++m_sp = m_ext->idAsset;
-			++m_pc;
-		CASE_END
-
 		CASE_BEGIN(CALLDATALOAD)
 		{
 			ON_OP();
@@ -725,7 +717,7 @@ void VM::interpretCases()
 			ON_OP();
 			updateIOGas();
 
-			*++m_sp = u256(0);
+			*++m_sp = m_ext->idAsset;
 			++m_pc;
 		CASE_END
 
