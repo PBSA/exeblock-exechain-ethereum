@@ -74,7 +74,6 @@ enum class Instruction: uint8_t
 	GASPRICE,           ///< get price of gas in current environment
 	EXTCODESIZE,        ///< get external code size (from another contract)
 	EXTCODECOPY,        ///< copy external code (from another contract)
-	IDASSET,
 
 	BLOCKHASH = 0x40,   ///< get hash of most recent complete block
 	COINBASE,           ///< get the block's coinbase address
@@ -82,6 +81,7 @@ enum class Instruction: uint8_t
 	NUMBER,             ///< get the block's number
 	DIFFICULTY,         ///< get the block's difficulty
 	GASLIMIT,           ///< get the block's gas limit
+	IDASSET,
 	
 	JUMPTO = 0x4a,      ///< alter the program counter to a jumpdest
 	JUMPIF,             ///< conditionally alter the program counter
