@@ -81,7 +81,6 @@ enum class Instruction: uint8_t
 	NUMBER,             ///< get the block's number
 	DIFFICULTY,         ///< get the block's difficulty
 	GASLIMIT,           ///< get the block's gas limit
-	PROPERTY, // TODO temp
 	
 	JUMPTO = 0x4a,      ///< alter the program counter to a jumpdest
 	JUMPIF,             ///< conditionally alter the program counter
@@ -183,6 +182,10 @@ enum class Instruction: uint8_t
 	JUMPC,              ///< alter the program counter - pre-verified
 	JUMPCI,             ///< conditionally alter the program counter - pre-verified
 	BAD,                ///< placed to force invalid instruction exception
+
+	IDASSET = 0xb0, // TODO temp
+	PROPERTY, // TODO temp
+	CONVERT, // TODO temp
 
 	CREATE = 0xf0,      ///< create a new account with associated code
 	CALL,               ///< message-call into an account
