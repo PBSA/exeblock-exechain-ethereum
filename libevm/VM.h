@@ -121,6 +121,8 @@ private:
 	uint64_t m_newMemSize = 0;
 	uint64_t m_copyMemSize = 0;
 
+	bytes callMethodResult; // TODO temp
+
 	// initialize interpreter
 	void initEntry();
 	void optimize();

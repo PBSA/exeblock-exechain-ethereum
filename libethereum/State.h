@@ -116,7 +116,7 @@ public:
 		KeepEmptyAccounts,
 		RemoveEmptyAccounts
 	};
-
+	
 	/// Default constructor; creates with a blank database prepopulated with the genesis block.
 	explicit State(u256 const& _accountStartNonce): State(_accountStartNonce, OverlayDB(), BaseState::Empty) {}
 
@@ -195,7 +195,7 @@ public:
 	 * @param _to Account to which @a _value will be added.
 	 * @param _value Amount to be transferred.
 	 */
-	void transferBalance(Address const& _from, Address const& _to, u256 const& _value) { subBalance(_from, _value); addBalance(_to, _value); }
+	virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value) { subBalance(_from, _value); addBalance(_to, _value); }
 
 	/// Get the root of the storage of an account.
 	h256 storageRoot(Address const& _contract) const;
@@ -238,7 +238,7 @@ public:
 	size_t codeSize(Address const& _contract) const;
 
 	/// Increament the account nonce.
-	void incNonce(Address const& _id);
+	virtual void incNonce(Address const& _id);
 
 	/// Set the account nonce to the given value. Is used to revert account
 	/// changes.
@@ -246,7 +246,7 @@ public:
 
 	/// Get the account nonce -- the number of transactions it has sent.
 	/// @returns 0 if the address has never been used.
-	u256 getNonce(Address const& _addr) const;
+	virtual u256 getNonce(Address const& _addr) const;
 
 	/// The hash of the root of our state tree.
 	h256 rootHash() const { return m_state.root(); }
@@ -254,7 +254,17 @@ public:
 	/// Commit all changes waiting in the address cache to the DB.
 	/// @param _commitBehaviour whether or not to remove empty accounts during commit.
 	// void commit(CommitBehaviour _commitBehaviour); // TODO temp
-	virtual void commit(CommitBehaviour _commitBehaviour); // TODO temp
+	///////////////////////////////////////////////////////////////// TODO temp   
+	virtual void commit(CommitBehaviour _commitBehaviour); 
+	
+	virtual void saveStackSize() {}
+	
+	virtual void revertStack() {}
+
+	virtual void publishContractTransfers() {}
+
+	virtual bool getObjectProperty(const std::string& location, dev::bytes& result) { if(location.empty() || result.size() == 0) return false; return false; };
+	/////////////////////////////////////////////////////////////////
 
 	/// Resets any uncommitted changes to the cache.
 	void setRoot(h256 const& _root);

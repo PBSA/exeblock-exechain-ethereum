@@ -202,7 +202,7 @@ namespace eth
 			&&GASPRICE,  \
 			&&EXTCODESIZE,  \
 			&&EXTCODECOPY,  \
-			&&INVALID,  \
+			&&INVALID, \
 			&&INVALID,  \
 			&&INVALID,  \
 			&&BLOCKHASH,     /* 40, */  \
@@ -317,9 +317,9 @@ namespace eth
 			&&JUMPC,  \
 			&&JUMPCI,  \
 			&&BAD,  \
-			&&INVALID,       /* B0, */  \
-			&&INVALID,  \
-			&&INVALID,  \
+			&&IDASSET,       /* B0, */  \
+			&&PROPERTY,  \
+			&&CONVERT,  \
 			&&INVALID,  \
 			&&INVALID,  \
 			&&INVALID,  \
