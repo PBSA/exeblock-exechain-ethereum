@@ -233,7 +233,7 @@ public:
 	ExtVMFace() = default;
 
 	/// Full constructor.
-	ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash, unsigned _depth, u256 _idAsset = u256(0));
+	ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash, unsigned _depth);
 
 	virtual ~ExtVMFace() = default;
 
@@ -282,7 +282,13 @@ public:
 	/// Return the EVM gas-price schedule for this execution context.
 	virtual EVMSchedule const& evmSchedule() const { return DefaultSchedule; }
 
-	virtual bool getObjectProperty(const std::string& location, dev::bytes& result) { if(location.empty() || result.size() == 0) return false; return false; }; // TODO temp
+//////////////////////////////////////////////////////////////////// // TODO temp
+	virtual bool getObjectProperty(const std::string&, dev::bytes&) { return false; };
+
+	virtual u256 balance(Address const&, const std::string&) { return 0; };
+
+	virtual u256 getIdAsset() { return 0; };
+////////////////////////////////////////////////////////////////////
 
 private:
 	EnvInfo const& m_envInfo;
@@ -299,8 +305,6 @@ public:
 	h256 codeHash;				///< SHA3 hash of the executing code
 	SubState sub;				///< Sub-band VM state (suicides, refund counter, logs).
 	unsigned depth = 0;			///< Depth of the present call.
-
-	u256 idAsset;
 };
 
 }

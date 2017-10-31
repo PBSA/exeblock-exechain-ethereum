@@ -263,7 +263,9 @@ public:
 
 	virtual void publishContractTransfers() {}
 
-	virtual bool getObjectProperty(const std::string& location, dev::bytes& result) { if(location.empty() || result.size() == 0) return false; return false; };
+	virtual bool getObjectProperty(const std::string&, dev::bytes&) { return false; };
+
+	virtual u256 balance(Address const&, const std::string&) const { return 0; };
 	/////////////////////////////////////////////////////////////////
 
 	/// Resets any uncommitted changes to the cache.
