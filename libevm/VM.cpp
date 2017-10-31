@@ -722,6 +722,7 @@ void VM::interpretCases()
 		CASE_END
 
 		CASE_BEGIN(PROPERTY)
+		{
 			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
 			m_newMemSize = memNeed(*m_sp, *(m_sp - 1));
 			updateMem();
@@ -758,10 +759,11 @@ void VM::interpretCases()
 
 			*++m_sp = offset;
 			++m_pc;
-
+		}
 		CASE_END
 
 		CASE_BEGIN(CONVERT)
+		{	
 			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
 			m_newMemSize = memNeed(*m_sp, *(m_sp - 1));
 			updateMem();
@@ -771,7 +773,7 @@ void VM::interpretCases()
 			uint64_t iOff = (uint64_t)*m_sp--;
 			uint64_t iSize = (uint64_t)*m_sp--;
 
-			std::cout << toHex(m_mem) << std::endl;
+			// std::cout << toHex(m_mem) << std::endl;
 
 			if(bytesConstRef(m_mem.data() + iOff, iSize).size() > 32){
 				throwBadInstruction();
@@ -779,7 +781,7 @@ void VM::interpretCases()
 
 			*++m_sp = u256(h256(bytesConstRef(m_mem.data() + iOff, iSize)));
 			++m_pc;
-
+		}
 		CASE_END
 ///////////////////////////////////////////////////
 
