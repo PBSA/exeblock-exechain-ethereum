@@ -180,7 +180,8 @@ const std::map<std::string,  Instruction> dev::eth::c_instructions =
 	{ "IDASSET", Instruction::IDASSET },
 	{ "PROPERTY", Instruction::PROPERTY },
 	{ "CONVERT", Instruction::CONVERT },
-	{ "ASSETBALANCE", Instruction::ASSETBALANCE }
+	{ "ASSETBALANCE", Instruction::ASSETBALANCE },
+	{ "CALLASSET", Instruction::CALLASSET }
 /////////////////////////////////////////////////////
 };
 
@@ -335,6 +336,7 @@ static const std::map<Instruction,  InstructionInfo> c_instructionInfo =
 	{ Instruction::PROPERTY,     { "PROPERTY",       0,     2,    1,  false,       Tier::Special } },
 	{ Instruction::CONVERT,      { "CONVERT",        0,     2,    1,  false,       Tier::Special } },
 	{ Instruction::ASSETBALANCE, { "ASSETBALANCE",   0,     3,    1,  false,       Tier::Special } },
+	{ Instruction::CALLASSET,    { "CALLASSET",      0,     8,    1,  true,        Tier::Special } },
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 }; 
  

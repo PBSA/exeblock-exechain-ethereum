@@ -202,6 +202,7 @@ void VM::interpretCases()
 
 		CASE_BEGIN(CALL)
 		CASE_BEGIN(CALLCODE)
+		CASE_BEGIN(CALLASSET)
 			m_bounce = &VM::caseCall;
 		CASE_RETURN
 
@@ -717,7 +718,7 @@ void VM::interpretCases()
 			ON_OP();
 			updateIOGas();
 
-			*++m_sp = m_ext->getIdAsset();
+			*++m_sp = m_ext->getCallIdAsset();
 			++m_pc;
 		CASE_END
 

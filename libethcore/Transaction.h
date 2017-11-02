@@ -157,9 +157,9 @@ public:
 	/// Get the fee associated for a transaction with the given data.
 	static bigint gasRequired(bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es, u256 const& _gas = 0);
 
-	void setIdAsset(u256 _idAsset) { m_idAsset = _idAsset; };
+	void setIdAsset(u256 _callIdAsset) { m_idAsset = _callIdAsset; };
 	
-	u256 getIdAsset() { return m_idAsset; }
+	u256 getCallIdAsset() { return m_idAsset; }
 
 protected:
 	/// Type of transaction.

@@ -321,7 +321,7 @@ namespace eth
 			&&PROPERTY,  \
 			&&CONVERT,  \
 			&&ASSETBALANCE,  \
-			&&INVALID,  \
+			&&CALLASSET,  \
 			&&INVALID,  \
 			&&INVALID,  \
 			&&INVALID,  \

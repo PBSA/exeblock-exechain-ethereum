@@ -188,6 +188,7 @@ enum class Instruction: uint8_t
 	PROPERTY,
 	CONVERT,
 	ASSETBALANCE,
+	CALLASSET,
 ////////////////////////////////////////////////
 
 	CREATE = 0xf0,      ///< create a new account with associated code

@@ -163,7 +163,8 @@ struct CallParameters
 	bytesRef out;
 	OnOpFunc onOp;
 
-	u256 idAsset;
+	u256 callIdAsset;
+	u256 transferIdAsset;
 };
 
 class EnvInfo
@@ -287,7 +288,7 @@ public:
 
 	virtual u256 balance(Address const&, const std::string&) { return 0; };
 
-	virtual u256 getIdAsset() { return 0; };
+	virtual u256 getCallIdAsset() { return 0; };
 ////////////////////////////////////////////////////////////////////
 
 private:

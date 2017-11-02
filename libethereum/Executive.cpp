@@ -242,14 +242,14 @@ bool Executive::execute()
 	m_s.subBalance(m_t.sender(), m_gasCost);
 
 	if (m_t.isCreation())
-		return create(m_t.sender(), m_t.value(), m_t.gasPrice(), m_t.gas() - (u256)m_baseGasRequired, &m_t.data(), m_t.sender(), m_t.getIdAsset());
+		return create(m_t.sender(), m_t.value(), m_t.gasPrice(), m_t.gas() - (u256)m_baseGasRequired, &m_t.data(), m_t.sender(), m_t.getCallIdAsset());
 	else
-		return call(m_t.receiveAddress(), m_t.sender(), m_t.value(), m_t.gasPrice(), bytesConstRef(&m_t.data()), m_t.gas() - (u256)m_baseGasRequired, m_t.getIdAsset());
+		return call(m_t.receiveAddress(), m_t.sender(), m_t.value(), m_t.gasPrice(), bytesConstRef(&m_t.data()), m_t.gas() - (u256)m_baseGasRequired, m_t.getCallIdAsset());
 }
 
-bool Executive::call(Address _receiveAddress, Address _senderAddress, u256 _value, u256 _gasPrice, bytesConstRef _data, u256 _gas, u256 _idAsset)
+bool Executive::call(Address _receiveAddress, Address _senderAddress, u256 _value, u256 _gasPrice, bytesConstRef _data, u256 _gas, u256 _callIdAsset)
 {
-	CallParameters params{_senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data, {}, {}, _idAsset};
+	CallParameters params{_senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data, {}, {}, _callIdAsset, u256(0)};
 	return call(params, _gasPrice, _senderAddress);
 }
 
@@ -308,9 +308,9 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 	return !m_ext;
 }
 
-bool Executive::create(Address _sender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _init, Address _origin, u256 _idAsset)
+bool Executive::create(Address _sender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _init, Address _origin, u256 _callIdAsset)
 {
-	_idAsset = 0;
+	_callIdAsset = 0;
 	m_s.saveStackSize();
 	m_revertLog.isCreation = true;
 

@@ -91,6 +91,14 @@ public:
 
 	State const& state() const { return m_s; }
 
+//////////////////////////////////////////////////////////////////// // TODO temp
+	virtual bool getObjectProperty(const std::string&, dev::bytes&) { return false; };
+
+	virtual u256 balance(Address const&, const std::string&) { return 0; };
+
+	virtual u256 getCallIdAsset() { return 0; };
+////////////////////////////////////////////////////////////////////
+
 // private:
 protected:
 	State& m_s;  ///< A reference to the base state.

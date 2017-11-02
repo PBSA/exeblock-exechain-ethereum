@@ -144,6 +144,8 @@ public:
 	Executive(Executive const&) = delete;
 	void operator=(Executive) = delete;
 
+	virtual ~Executive() = default;
+
 	/// Initializes the executive for evaluating a transaction. You must call finalize() at some point following this.
 	void initialize(bytesConstRef _transaction) { initialize(Transaction(_transaction, CheckTransaction::None)); }
 	void initialize(Transaction const& _transaction);
@@ -168,11 +170,14 @@ public:
 
 	/// Set up the executive for evaluating a bare CREATE (contract-creation) operation.
 	/// @returns false iff go() must be called (and thus a VM execution in required).
-	bool create(Address _txSender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _code, Address _originAddress, u256 _idAsset = u256(0));
+	// bool create(Address _txSender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _code, Address _originAddress, u256 _callIdAsset = u256(0));
+	virtual bool create(Address _txSender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _code, Address _originAddress, u256 _callIdAsset = u256(0)); // TODO temp
+
 	/// Set up the executive for evaluating a bare CALL (message call) operation.
 	/// @returns false iff go() must be called (and thus a VM execution in required).
-	bool call(Address _receiveAddress, Address _txSender, u256 _txValue, u256 _gasPrice, bytesConstRef _txData, u256 _gas, u256 _idAsset = u256(0));
-	bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+	bool call(Address _receiveAddress, Address _txSender, u256 _txValue, u256 _gasPrice, bytesConstRef _txData, u256 _gas, u256 _callIdAsset = u256(0));
+	// bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+	virtual bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin); // TODO temp
 	/// Finalise an operation through accruing the substate into the parent context.
 	void accrueSubState(SubState& _parentContext);
 
@@ -204,8 +209,8 @@ public:
 	/// object invalid so no further changes should be made to it.
 	AccountRevertLog takeRevertLog() { return std::move(m_revertLog); }
 
-private: // TODO temp
-// protected: // TODO temp
+// private:
+protected: // TODO temp
 	State& m_s;							///< The state to which this operation/transaction is applied.
 	// TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
 	EnvInfo m_envInfo;					///< Information on the runtime environment.
