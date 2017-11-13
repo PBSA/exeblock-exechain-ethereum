@@ -67,11 +67,11 @@ public:
 
 	/// Create a new contract.
 	// virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {}) override final;
-	virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {});
+	virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {}) override;
 
 	/// Create a new message call. Leave _myAddressOverride as the default to use the present address as caller.
 	// virtual bool call(CallParameters& _params) override final;
-	virtual bool call(CallParameters& _params);
+	virtual bool call(CallParameters& _params) override;
 
 	/// Read address's balance.
 	virtual u256 balance(Address _a) override final { return m_s.balance(_a); }
@@ -94,11 +94,11 @@ public:
 	State const& state() const { return m_s; }
 
 //////////////////////////////////////////////////////////////////// // TODO temp
-	virtual bool getObjectProperty(const std::string&, dev::bytes&) { return false; };
+	virtual bool getObjectProperty(const std::string&, dev::bytes&) override { return false; };
 
-	virtual u256 balance(Address const&, const std::string&) { return 0; };
+	virtual u256 balance(Address const&, const std::string&) override { return 0; };
 
-	virtual u256 getCallIdAsset() { return 0; };
+	virtual u256 getCallIdAsset() override { return 0; };
 ////////////////////////////////////////////////////////////////////
 
 // private:
