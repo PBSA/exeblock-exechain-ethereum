@@ -206,9 +206,7 @@ bool VM::caseCallSetup(CallParameters *callParams)
 		*(m_sp) = callIdAsset;
 		callParams->transferIdAsset = u256(*m_sp--);
 
-		std::ostringstream stream;
-		stream << uint64_t(callParams->transferIdAsset);
-		std::string idAsset = "1.3." + stream.str();
+		std::string idAsset = "1.3." + std::to_string(uint64_t(callParams->transferIdAsset));
 
 		balance = m_ext->balance(m_ext->myAddress, idAsset);
 	}
