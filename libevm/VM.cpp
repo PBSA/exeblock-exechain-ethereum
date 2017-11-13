@@ -202,6 +202,7 @@ void VM::interpretCases()
 
 		CASE_BEGIN(CALL)
 		CASE_BEGIN(CALLCODE)
+		CASE_BEGIN(CALLASSET)
 			m_bounce = &VM::caseCall;
 		CASE_RETURN
 
@@ -717,7 +718,7 @@ void VM::interpretCases()
 			ON_OP();
 			updateIOGas();
 
-			*++m_sp = m_ext->idAsset;
+			*++m_sp = m_ext->getCallIdAsset();
 			++m_pc;
 		CASE_END
 
@@ -728,8 +729,6 @@ void VM::interpretCases()
 			updateMem();
 			ON_OP();
 			updateIOGas();
-
-			// std::cout << toHex(m_mem) << std::endl;
 
 			uint64_t slotSize = 32;
 			uint64_t inOff = (uint64_t)*m_sp--;
@@ -763,23 +762,38 @@ void VM::interpretCases()
 		CASE_END
 
 		CASE_BEGIN(CONVERT)
-		{	
+		{
 			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
 			m_newMemSize = memNeed(*m_sp, *(m_sp - 1));
 			updateMem();
 			ON_OP();
 			updateIOGas();
 
-			uint64_t iOff = (uint64_t)*m_sp--;
-			uint64_t iSize = (uint64_t)*m_sp--;
+			uint64_t inOff = (uint64_t)*m_sp--;
+			uint64_t inSize = (uint64_t)*m_sp--;
 
-			// std::cout << toHex(m_mem) << std::endl;
-
-			if(bytesConstRef(m_mem.data() + iOff, iSize).size() > 32){
+			if(bytesConstRef(m_mem.data() + inOff, inSize).size() > 32){
 				throwBadInstruction();
 			}
 
-			*++m_sp = u256(h256(bytesConstRef(m_mem.data() + iOff, iSize)));
+			*++m_sp = u256(h256(bytesConstRef(m_mem.data() + inOff, inSize)));
+			++m_pc;
+		}
+		CASE_END
+
+		CASE_BEGIN(ASSETBALANCE)
+		{
+			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+			m_newMemSize = memNeed(*m_sp, *(m_sp - 1));
+			updateMem();
+			ON_OP();
+			updateIOGas();
+
+			uint64_t inOff = (uint64_t)*m_sp--;
+			uint64_t inSize = (uint64_t)*m_sp--;
+			Address addr(asAddress(*m_sp--));
+
+			*++m_sp = m_ext->balance(addr, bytesConstRef(m_mem.data() + inOff, inSize).toString());
 			++m_pc;
 		}
 		CASE_END

@@ -43,8 +43,8 @@ class ExtVM: public ExtVMFace
 {
 public:
 	/// Full constructor.
-	ExtVM(State& _s, AccountRevertLog& _orig, EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytesConstRef _code, h256 const& _codeHash, unsigned _depth = 0, u256 _idAsset = u256(0)):
-		ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(), _codeHash, _depth, _idAsset), m_s(_s), m_sealEngine(_sealEngine),
+	ExtVM(dev::eth::State& _s, AccountRevertLog& _orig, EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytesConstRef _code, h256 const& _codeHash, unsigned _depth = 0) :
+		ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(), _codeHash, _depth), m_s(_s), m_sealEngine(_sealEngine),
 		m_revertLog(_orig)
 	{
 		// Contract: processing account must exist. In case of CALL, the ExtVM
@@ -66,10 +66,12 @@ public:
 	virtual size_t codeSizeAt(Address _a) override final;
 
 	/// Create a new contract.
-	virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {}) override final;
+	// virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {}) override final;
+	virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {});
 
 	/// Create a new message call. Leave _myAddressOverride as the default to use the present address as caller.
-	virtual bool call(CallParameters& _params) override final;
+	// virtual bool call(CallParameters& _params) override final;
+	virtual bool call(CallParameters& _params);
 
 	/// Read address's balance.
 	virtual u256 balance(Address _a) override final { return m_s.balance(_a); }
@@ -91,9 +93,16 @@ public:
 
 	State const& state() const { return m_s; }
 
-	bool getObjectProperty(const std::string& location, dev::bytes& result) override { return m_s.getObjectProperty(location, result); }; // TODO temp
+//////////////////////////////////////////////////////////////////// // TODO temp
+	virtual bool getObjectProperty(const std::string&, dev::bytes&) { return false; };
 
-private:
+	virtual u256 balance(Address const&, const std::string&) { return 0; };
+
+	virtual u256 getCallIdAsset() { return 0; };
+////////////////////////////////////////////////////////////////////
+
+// private:
+protected:
 	State& m_s;  ///< A reference to the base state.
 	SealEngineFace const& m_sealEngine;
 	AccountRevertLog& m_revertLog;  ///< The account revert log.

@@ -194,11 +194,31 @@ bool VM::caseCallSetup(CallParameters *callParams)
 	uint64_t outOff = (uint64_t)*m_sp--;
 	uint64_t outSize = (uint64_t)*m_sp--;
 
-	if (m_ext->balance(m_ext->myAddress) >= callParams->valueTransfer && m_ext->depth < 1024)
+///////////////////////////////////////////////////// // TODO temp
+	u256 balance = m_ext->balance(m_ext->myAddress);
+
+	if(m_op == Instruction::CALLASSET) {
+		u256 callIdAsset = *(m_sp - 4);
+		*(m_sp - 4) = *(m_sp - 3);
+		*(m_sp - 3) = *(m_sp - 2);
+		*(m_sp - 2) = *(m_sp - 1);
+		*(m_sp - 1) = *(m_sp);
+		*(m_sp) = callIdAsset;
+		callParams->transferIdAsset = u256(*m_sp--);
+
+		std::string idAsset = "1.3." + std::to_string(uint64_t(callParams->transferIdAsset));
+
+		balance = m_ext->balance(m_ext->myAddress, idAsset);
+	}
+/////////////////////////////////////////////////////
+
+	// if (m_ext->balance(m_ext->myAddress) >= callParams->valueTransfer && m_ext->depth < 1024)
+	if (balance >= callParams->valueTransfer && m_ext->depth < 1024) // TODO temp
 	{
 		callParams->onOp = m_onOp;
 		callParams->senderAddress = m_op == Instruction::DELEGATECALL ? m_ext->caller : m_ext->myAddress;
-		callParams->receiveAddress = m_op == Instruction::CALL ? callParams->codeAddress : m_ext->myAddress;
+		// callParams->receiveAddress = m_op == Instruction::CALL ? callParams->codeAddress : m_ext->myAddress;
+		callParams->receiveAddress = (m_op == Instruction::CALL || m_op == Instruction::CALLASSET) ? callParams->codeAddress : m_ext->myAddress; // TODO temp
 		callParams->data = bytesConstRef(m_mem.data() + inOff, inSize);
 		callParams->out = bytesRef(m_mem.data() + outOff, outSize);
 		return true;

@@ -320,8 +320,8 @@ namespace eth
 			&&IDASSET,       /* B0, */  \
 			&&PROPERTY,  \
 			&&CONVERT,  \
-			&&INVALID,  \
-			&&INVALID,  \
+			&&ASSETBALANCE,  \
+			&&CALLASSET,  \
 			&&INVALID,  \
 			&&INVALID,  \
 			&&INVALID,  \

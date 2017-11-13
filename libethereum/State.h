@@ -263,7 +263,11 @@ public:
 
 	virtual void publishContractTransfers() {}
 
-	virtual bool getObjectProperty(const std::string& location, dev::bytes& result) { if(location.empty() || result.size() == 0) return false; return false; };
+	virtual bool getObjectProperty(const std::string&, dev::bytes&) { return false; };
+
+	virtual u256 balance(Address const&, const std::string&) const { return 0; };
+
+	virtual void transferBalance(Address const&, Address const&, u256 const&, u256 const&) {}
 	/////////////////////////////////////////////////////////////////
 
 	/// Resets any uncommitted changes to the cache.
@@ -274,7 +278,7 @@ public:
 	u256 const& requireAccountStartNonce() const;
 	void noteAccountStartNonce(u256 const& _actual);
 
-// private: // TODO temp
+// private:
 protected: // TODO temp
 	/// Turns all "touched" empty accounts into non-alive accounts.
 	void removeEmptyAccounts();
