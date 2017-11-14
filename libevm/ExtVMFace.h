@@ -165,6 +165,7 @@ struct CallParameters
 
 	u256 callIdAsset;
 	u256 transferIdAsset;
+	bool trIdAsset;
 };
 
 class EnvInfo

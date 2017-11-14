@@ -195,8 +195,8 @@ bool VM::caseCallSetup(CallParameters *callParams)
 	uint64_t outSize = (uint64_t)*m_sp--;
 
 ///////////////////////////////////////////////////// // TODO temp
+	callParams->callIdAsset = m_ext->getCallIdAsset();
 	u256 balance = m_ext->balance(m_ext->myAddress);
-
 	if(m_op == Instruction::CALLASSET) {
 		u256 callIdAsset = *(m_sp - 4);
 		*(m_sp - 4) = *(m_sp - 3);
@@ -205,6 +205,7 @@ bool VM::caseCallSetup(CallParameters *callParams)
 		*(m_sp - 1) = *(m_sp);
 		*(m_sp) = callIdAsset;
 		callParams->transferIdAsset = u256(*m_sp--);
+		callParams->trIdAsset = true;
 
 		std::string idAsset = "1.3." + std::to_string(uint64_t(callParams->transferIdAsset));
 
