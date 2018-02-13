@@ -1,17 +1,11 @@
-aux_source_directory(. SRC_LIST)
+file(GLOB sources "*.cpp" "*.h")
 
-file(GLOB HEADERS "*.h")
+add_library(web3jsonrpc ${sources})
 
-add_library(web3jsonrpc ${SRC_LIST} ${HEADERS})
-
-jsonrpcstub_create(web3jsonrpc eth.json
+jsonrpcstub_create(
+	web3jsonrpc eth.json
 	dev::rpc::EthFace ${CMAKE_CURRENT_SOURCE_DIR} EthFace
 	EthClient ${CMAKE_CURRENT_BINARY_DIR} EthClient
-)
-
-jsonrpcstub_create(web3jsonrpc db.json
-	dev::rpc::DBFace ${CMAKE_CURRENT_SOURCE_DIR} DBFace
-	DBClient ${CMAKE_CURRENT_BINARY_DIR} DBClient
 )
 
 jsonrpcstub_create(web3jsonrpc debug.json
@@ -19,19 +13,9 @@ jsonrpcstub_create(web3jsonrpc debug.json
 	DebugClient ${CMAKE_CURRENT_BINARY_DIR} DebugClient
 )
 
-jsonrpcstub_create(web3jsonrpc whisper.json
-	dev::rpc::WhisperFace ${CMAKE_CURRENT_SOURCE_DIR} WhisperFace
-	WhisperClient ${CMAKE_CURRENT_BINARY_DIR} WhisperClient
-)
-
 jsonrpcstub_create(web3jsonrpc net.json
 	dev::rpc::NetFace ${CMAKE_CURRENT_SOURCE_DIR} NetFace
 	NetClient ${CMAKE_CURRENT_BINARY_DIR} NetClient
-)
-
-jsonrpcstub_create(web3jsonrpc bzz.json
-	dev::rpc::BzzFace ${CMAKE_CURRENT_SOURCE_DIR} BzzFace
-	BzzClient ${CMAKE_CURRENT_BINARY_DIR} BzzClient
 )
 
 jsonrpcstub_create(web3jsonrpc web3.json
@@ -49,11 +33,6 @@ jsonrpcstub_create(web3jsonrpc admin_eth.json
 	AdminEthClient ${CMAKE_CURRENT_BINARY_DIR} AdminEthClient
 )
 
-jsonrpcstub_create(web3jsonrpc admin_utils.json
-	dev::rpc::AdminUtilsFace ${CMAKE_CURRENT_SOURCE_DIR} AdminUtilsFace
-	AdminUtilsClient ${CMAKE_CURRENT_BINARY_DIR} AdminUtilsClient
-)
-
 jsonrpcstub_create(web3jsonrpc personal.json
 	dev::rpc::PersonalFace ${CMAKE_CURRENT_SOURCE_DIR} PersonalFace
 	PersonalClient ${CMAKE_CURRENT_BINARY_DIR} PersonalClient
@@ -64,11 +43,4 @@ jsonrpcstub_create(web3jsonrpc test.json
 	TestClient ${CMAKE_CURRENT_BINARY_DIR} TestClient
 )
 
-find_package(Web3)
-
-target_include_directories(web3jsonrpc PRIVATE ..)
-target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
-                                  ${Web3_WHISPER_LIBRARIES}
-                                  jsonrpc::server)
-
-install(TARGETS web3jsonrpc RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+target_link_libraries(web3jsonrpc ethashseal webthree libjson-rpc-cpp::server)

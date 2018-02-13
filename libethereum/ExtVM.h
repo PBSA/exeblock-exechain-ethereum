@@ -43,9 +43,8 @@ class ExtVM: public ExtVMFace
 {
 public:
 	/// Full constructor.
-	ExtVM(dev::eth::State& _s, AccountRevertLog& _orig, EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytesConstRef _code, h256 const& _codeHash, unsigned _depth = 0) :
-		ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(), _codeHash, _depth), m_s(_s), m_sealEngine(_sealEngine),
-		m_revertLog(_orig)
+	ExtVM(State& _s, EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Address _myAddress, Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytesConstRef _code, h256 const& _codeHash, unsigned _depth = 0, bool _staticCall = false):
+		ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(), _codeHash, _depth, _staticCall), m_s(_s), m_sealEngine(_sealEngine)
 	{
 		// Contract: processing account must exist. In case of CALL, the ExtVM
 		// is created only if an account has code (so exist). In case of CREATE
@@ -66,12 +65,11 @@ public:
 	virtual size_t codeSizeAt(Address _a) override final;
 
 	/// Create a new contract.
-	// virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {}) override final;
-	virtual h160 create(u256 _endowment, u256& io_gas, bytesConstRef _code, OnOpFunc const& _onOp = {}) override;
+	virtual std::pair<h160, owning_bytes_ref> create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op, u256 _salt, OnOpFunc const& _onOp = {}) override;
 
 	/// Create a new message call. Leave _myAddressOverride as the default to use the present address as caller.
-	// virtual bool call(CallParameters& _params) override final;
-	virtual bool call(CallParameters& _params) override;
+	/// @returns success flag and output data, if any.
+	virtual std::pair<bool, owning_bytes_ref> call(CallParameters& _params) override;
 
 	/// Read address's balance.
 	virtual u256 balance(Address _a) override final { return m_s.balance(_a); }
@@ -89,9 +87,12 @@ public:
 	virtual void suicide(Address _a) override final;
 
 	/// Return the EVM gas-price schedule for this execution context.
-	virtual EVMSchedule const& evmSchedule() const override final { return m_sealEngine.evmSchedule(envInfo()); }
+	virtual EVMSchedule const& evmSchedule() const override final { return m_sealEngine.evmSchedule(envInfo().number()); }
 
 	State const& state() const { return m_s; }
+
+	/// Hash of a block if within the last 256 blocks, or h256() otherwise.
+	h256 blockHash(u256 _number) override;
 
 //////////////////////////////////////////////////////////////////// // TODO temp
 	virtual bool getObjectProperty(const std::string&, dev::bytes&) override { return false; };
@@ -105,7 +106,6 @@ public:
 protected:
 	State& m_s;  ///< A reference to the base state.
 	SealEngineFace const& m_sealEngine;
-	AccountRevertLog& m_revertLog;  ///< The account revert log.
 };
 
 }

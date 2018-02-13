@@ -1,32 +1,35 @@
 
-set(SOURCES
-	ExtVMFace.cpp
-	VM.cpp
-	VMOpt.cpp
-	VMCalls.cpp
-	VMFactory.cpp
+set(sources
+    ExtVMFace.cpp ExtVMFace.h
+    Instruction.cpp Instruction.h
+    VMFace.h
+    VMConfig.h
+    VM.cpp VM.h
+    VMCalls.cpp
+    VMOpt.cpp
+    VMSIMD.cpp
+    VMValidate.cpp
+    VMFactory.cpp VMFactory.h
 )
 
-if (EVMJIT)
-	list(APPEND SOURCES
-		JitVM.cpp
-		SmartVM.cpp
-	)
+if(EVMJIT OR HERA)
+    list(APPEND sources
+        EVMC.cpp EVMC.h
+    )
 endif()
 
-file(GLOB HEADERS "*.h")
+add_library(evm ${sources})
 
-add_library(evm ${SOURCES} ${HEADERS})
+target_link_libraries(evm PUBLIC ethcore devcore PRIVATE jsoncpp_lib_static Boost::program_options)
+target_include_directories(evm PUBLIC ${CMAKE_SOURCE_DIR}/evmjit/include)
+target_include_directories(evm PUBLIC ${CMAKE_SOURCE_DIR}/hera/src)
 
-find_package(Eth)
-
-target_link_libraries(evm ${Eth_ETHCORE_LIBRARIES})
-target_link_libraries(evm ${Eth_EVMCORE_LIBRARIES})
-target_include_directories(evm PRIVATE .. ${JSONCPP_INCLUDE_DIR})
-
-if (EVMJIT)
-	target_include_directories(evm PRIVATE ../evmjit/include)
-	target_link_libraries(evm ${Eth_EVMJIT_LIBRARIES})
+if(EVMJIT)
+    target_link_libraries(evm PRIVATE evmjit)
+    target_compile_definitions(evm PRIVATE ETH_EVMJIT)
 endif()
 
-install(TARGETS evm RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+if(HERA)
+    target_link_libraries(evm PRIVATE hera)
+    target_compile_definitions(evm PRIVATE ETH_HERA)
+endif()

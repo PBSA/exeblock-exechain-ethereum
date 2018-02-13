@@ -26,29 +26,35 @@ branches:
   only:
     - master
     - develop
+    - appveyor
+    - hunter
 os: Visual Studio 2015
 configuration:
-    - RelWithDebInfo
+  - RelWithDebInfo
 environment:
-    TESTS: On
-cache: build/evmjit/llvm
-#RDP LOGIN details for trouble shooting
-#init:
-#    - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
-#on_finish:
-#    - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+  TESTS: On
+  GITHUB_USER_PASSWORD:
+    secure: 7TuNppxpvI3M/IF1PfvzZ8LluCeCQAsdFoJY+KhNv/pe/rAw5HEsTjqdbyM1mEtd
+cache:
+  - build/deps -> cmake/ProjectLibFF.cmake
 install:
-    - git submodule update --init --recursive
-    - scripts/install_deps.bat
-    - set ETHEREUM_DEPS_PATH=%APPVEYOR_BUILD_FOLDER%\deps\install
-before_build:
-    - if not exist build mkdir build
-    - cd build
-    - cmake -G "Visual Studio 14 2015 Win64" .. -DTESTS=%TESTS% -DEVMJIT=On
+  - git submodule update --init --recursive
+  - scripts/install_deps.bat
+  - set ETHEREUM_DEPS_PATH=%APPVEYOR_BUILD_FOLDER%\deps
+before_build: |
+  if not exist build mkdir build
+  cd build
+  cmake -G "Visual Studio 14 2015 Win64" .. -DTESTS=%TESTS% -DEVMJIT=OFF
 build_script:
     - msbuild cpp-ethereum.sln /p:Configuration=%CONFIGURATION% /m:%NUMBER_OF_PROCESSORS% /v:minimal
     - cd %APPVEYOR_BUILD_FOLDER%
     - scripts\release.bat %CONFIGURATION% %ETHEREUM_DEPS_PATH% %TESTS%
+after_build:
+  ps: |
+    if (-not $env:appveyor_pull_request_number) {
+      pip install --user requests
+      cmake --build build --target hunter_upload_cache
+    }
 test_script:
     - cd %APPVEYOR_BUILD_FOLDER%
     - scripts\tests.bat %TESTS% %CONFIGURATION% %APPVEYOR_BUILD_FOLDER% %ETHEREUM_DEPS_PATH%

@@ -177,11 +177,11 @@ const std::map<std::string,  Instruction> dev::eth::c_instructions =
 	{ "JUMPCI", Instruction::JUMPCI },
 
 ///////////////////////////////////////////////////// // TODO temp
-	{ "IDASSET", Instruction::IDASSET },
-	{ "PROPERTY", Instruction::PROPERTY },
-	{ "CONVERT", Instruction::CONVERT },
-	{ "ASSETBALANCE", Instruction::ASSETBALANCE },
-	{ "CALLASSET", Instruction::CALLASSET }
+	// { "IDASSET", Instruction::IDASSET },
+	// { "PROPERTY", Instruction::PROPERTY },
+	// { "CONVERT", Instruction::CONVERT },
+	// { "ASSETBALANCE", Instruction::ASSETBALANCE },
+	// { "CALLASSET", Instruction::CALLASSET }
 /////////////////////////////////////////////////////
 };
 
@@ -332,11 +332,11 @@ static const std::map<Instruction,  InstructionInfo> c_instructionInfo =
 	{ Instruction::JUMPCI,       { "JUMPCI",         0,     1,     0,   true,      Tier::High } },
 	{ Instruction::STOP,         { "BAD",            0,     0,     0,   true,      Tier::Zero } },
 //////////////////////////////////////////////////////////////////////////////////////////////////////// // TODO temp
-	{ Instruction::IDASSET,      { "IDASSET",        0,     0,    1,  false,       Tier::Base } },
-	{ Instruction::PROPERTY,     { "PROPERTY",       0,     2,    1,  false,       Tier::Special } },
-	{ Instruction::CONVERT,      { "CONVERT",        0,     2,    1,  false,       Tier::Special } },
-	{ Instruction::ASSETBALANCE, { "ASSETBALANCE",   0,     3,    1,  false,       Tier::Special } },
-	{ Instruction::CALLASSET,    { "CALLASSET",      0,     8,    1,  true,        Tier::Special } },
+	// { Instruction::IDASSET,      { "IDASSET",        0,     0,    1,  false,       Tier::Base } },
+	// { Instruction::PROPERTY,     { "PROPERTY",       0,     2,    1,  false,       Tier::Special } },
+	// { Instruction::CONVERT,      { "CONVERT",        0,     2,    1,  false,       Tier::Special } },
+	// { Instruction::ASSETBALANCE, { "ASSETBALANCE",   0,     3,    1,  false,       Tier::Special } },
+	// { Instruction::CALLASSET,    { "CALLASSET",      0,     8,    1,  true,        Tier::Special } },
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 }; 
  
