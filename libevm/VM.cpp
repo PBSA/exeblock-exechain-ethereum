@@ -1348,22 +1348,19 @@ void VM::interpretCases()
 			updateIOGas();
 
 			m_SPP[0] = m_ext->getCallIdAsset();
-			// *++m_SPP = m_ext->getCallIdAsset();
-			// ++m_PC;
 		}
 		NEXT
 
 		CASE(PROPERTY)
 		{
 			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
-			m_newMemSize = memNeed(*m_SP, *(m_SP - 1));
-			// updateMem();
+			updateMem(memNeed(m_SP[0], m_SP[1]));
 			ON_OP();
 			updateIOGas();
 
 			uint64_t slotSize = 32;
-			uint64_t inOff = (uint64_t)*m_SP--;
-			uint64_t inSize = (uint64_t)*m_SP--;
+			uint64_t inOff = (uint64_t)m_SP[0];
+			uint64_t inSize = (uint64_t)m_SP[1];
 
 			if(!m_ext->getObjectProperty(bytesConstRef(m_mem.data() + inOff, inSize).toString(), callMethodResult)){
 				throwBadInstruction();
@@ -1379,53 +1376,47 @@ void VM::interpretCases()
 			h256 newOffsetTemp(u256(uint64_t(offset) + uint64_t(32) + uint64_t(callMethodResult.size())));
 			std::memcpy(m_mem.data() + 64, newOffsetTemp.asBytes().data(), newOffsetTemp.asBytes().size());
 
-			m_newMemSize = memNeed(offset, u256(slotSize + callMethodResult.size()));
-			// updateMem();
+			updateMem(memNeed(offset, u256(slotSize + callMethodResult.size())));
 
 			h256 sizeTemp = h256(u256(dataSize));
 			std::memcpy(m_mem.data() + uint64_t(offset), sizeTemp.asBytes().data(), sizeTemp.asBytes().size());
 			std::memcpy(m_mem.data() + uint64_t(offset + slotSize), callMethodResult.data(), callMethodResult.size());
 			callMethodResult.clear();
 
-			*++m_SP = offset;
-			// ++m_PC;
+			m_SPP[0] = offset;
 		}
 		NEXT
 
 		CASE(CONVERT)
 		{
 			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
-			m_newMemSize = memNeed(*m_SP, *(m_SP - 1));
-			// updateMem();
+			updateMem(memNeed(m_SP[0], m_SP[1]));
 			ON_OP();
 			updateIOGas();
 
-			uint64_t inOff = (uint64_t)*m_SP--;
-			uint64_t inSize = (uint64_t)*m_SP--;
+			uint64_t inOff = (uint64_t)m_SP[0];
+			uint64_t inSize = (uint64_t)m_SP[1];
 
 			if(bytesConstRef(m_mem.data() + inOff, inSize).size() > 32){
 				throwBadInstruction();
 			}
 
-			*++m_SP = u256(h256(bytesConstRef(m_mem.data() + inOff, inSize)));
-			// ++m_PC;
+			m_SPP[0] = u256(h256(bytesConstRef(m_mem.data() + inOff, inSize)));
 		}
 		NEXT
 
 		CASE(ASSETBALANCE)
 		{
 			// m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
-			m_newMemSize = memNeed(*m_SP, *(m_SP - 1));
-			// updateMem();
+			updateMem(memNeed(m_SP[0], m_SP[1]));
 			ON_OP();
 			updateIOGas();
 
-			uint64_t inOff = (uint64_t)*m_SP--;
-			uint64_t inSize = (uint64_t)*m_SP--;
-			Address addr(asAddress(*m_SP--));
+			uint64_t inOff = (uint64_t)m_SP[0];
+			uint64_t inSize = (uint64_t)m_SP[1];
+			Address addr(asAddress(m_SP[2]));
 
-			*++m_SP = m_ext->balance(addr, bytesConstRef(m_mem.data() + inOff, inSize).toString());
-			// ++m_PC;
+			m_SPP[0] = m_ext->balance(addr, bytesConstRef(m_mem.data() + inOff, inSize).toString());
 		}
 		NEXT
 ///////////////////////////////////////////////////

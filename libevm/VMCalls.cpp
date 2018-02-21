@@ -232,7 +232,7 @@ bool VM::caseCallSetup(CallParameters *callParams, bytesRef& o_output)
 
 	callParams->staticCall = (m_OP == Instruction::STATICCALL || m_ext->staticCall);
 
-	bool const haveValueArg = m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE;
+	bool const haveValueArg = m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE || m_OP == Instruction::CALLASSET;
 
 	Address destinationAddr = asAddress(m_SP[1]);
 	if (m_OP == Instruction::CALL && !m_ext->exists(destinationAddr))
@@ -293,13 +293,19 @@ bool VM::caseCallSetup(CallParameters *callParams, bytesRef& o_output)
 	callParams->callIdAsset = m_ext->getCallIdAsset();
 	u256 balance = m_ext->balance(m_ext->myAddress);
 	if(m_OP == Instruction::CALLASSET) {
-		u256 callIdAsset = *(m_SP - 4);
-		*(m_SP - 4) = *(m_SP - 3);
-		*(m_SP - 3) = *(m_SP - 2);
-		*(m_SP - 2) = *(m_SP - 1);
-		*(m_SP - 1) = *(m_SP);
-		*(m_SP) = callIdAsset;
-		callParams->transferIdAsset = u256(*m_SP--);
+
+		// u256 callIdAsset = m_SP[11];
+		// m_SP[11] = m_SP[12];
+		// m_SP[12] = m_SP[13];
+		// m_SP[13] = m_SP[14];
+		// m_SP[14] = m_SP[15];
+		// m_SP[15] = m_SP[16];
+		// m_SP[15] = callIdAsset;
+		// m_SP[16] = callIdAsset;
+
+		// --m_SP;
+
+		callParams->transferIdAsset = m_SP[11];
 		callParams->trIdAsset = true;
 
 		std::string idAsset = "1.3." + std::to_string(uint64_t(callParams->transferIdAsset));

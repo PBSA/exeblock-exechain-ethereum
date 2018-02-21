@@ -251,6 +251,8 @@ public:
 	 */
 	virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value) { subBalance(_from, _value); addBalance(_to, _value); }
 
+	virtual void transferBalanceSuicide(Address const& _from, Address const& _to) { addBalance(_to, balance(_from)); subBalance(_from, balance(_from)); }
+
 	/// Get the root of the storage of an account.
 	h256 storageRoot(Address const& _contract) const;
 
@@ -322,6 +324,8 @@ public:
 	virtual u256 balance(Address const&, const std::string&) const { return 0; };
 
 	virtual void transferBalance(Address const&, Address const&, u256 const&, u256 const&) {}
+
+	virtual dev::Address getNewAddress() const { return Address(); }
 	/////////////////////////////////////////////////////////////////
 
 	/// Resets any uncommitted changes to the cache.
