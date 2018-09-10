@@ -65,9 +65,10 @@ bool Test::test_mineBlocks(int _number)
 
 bool Test::test_modifyTimestamp(int _timestamp)
 {
+	// FIXME: Fix year 2038 issue.
 	try
 	{
-		asClientTest(m_eth).modifyTimestamp(u256(_timestamp));
+		asClientTest(m_eth).modifyTimestamp(_timestamp);
 	}
 	catch (std::exception const&)
 	{
@@ -94,6 +95,7 @@ bool Test::test_rewindToBlock(int _number)
 	try
 	{
 		m_eth.rewind(_number);
+		asClientTest(m_eth).completeSync();
 	}
 	catch (std::exception const&)
 	{

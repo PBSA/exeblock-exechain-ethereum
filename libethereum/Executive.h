@@ -22,7 +22,6 @@
 // #include <json/json.h> // TODO temp
 #include "deps/jsoncpp/include/json/json.h" // TODO temp
 #include <libdevcore/Log.h>
-#include <libevmcore/Instruction.h>
 #include <libethcore/Common.h>
 #include <libevm/VMFace.h>
 #include "Transaction.h"
@@ -79,23 +78,6 @@ private:
 	DebugOptions m_options;
 };
 
-/// Keeps unmodified account data for future changes revertion.
-struct AccountRevertLog
-{
-	bool existed = false;
-	bool isCreation = false;
-	int nonceInc = 0;
-	Address address;  ///< The address of the account.
-	Address caller;   ///< The address of the message caller making the changes.
-	u256 transfer;
-	std::unordered_map<u256, u256> storage;
-	Address selfdestructBeneficiary;
-
-	/// Other accounts changed by CALL/CREATEs.
-	std::vector<AccountRevertLog> children;
-};
-
-
 /**
  * @brief Message-call/contract-creation executor; useful for executing transactions.
  *
@@ -132,14 +114,14 @@ public:
 	 * Creates executive to operate on the state of end of the given block, populating environment
 	 * info accordingly, with last hashes given explicitly.
 	 */
-	Executive(Block& _s, LastHashes const& _lh = LastHashes(), unsigned _level = 0);
+	Executive(Block& _s, LastBlockHashesFace const& _lh, unsigned _level = 0);
 
 	/** Previous-state constructor.
 	 * Creates executive to operate on the state of a particular transaction in the given block,
 	 * populating environment info from the given Block and the LastHashes portion from the BlockChain.
 	 * State is assigned the resultant value, but otherwise unused.
 	 */
-	Executive(State& _s, Block const& _block, unsigned _txIndex, BlockChain const& _bc, unsigned _level = 0);
+	Executive(State& io_s, Block const& _block, unsigned _txIndex, BlockChain const& _bc, unsigned _level = 0);
 
 	Executive(Executive const&) = delete;
 	void operator=(Executive) = delete;
@@ -151,7 +133,8 @@ public:
 	void initialize(Transaction const& _transaction);
 	/// Finalise a transaction previously set up with initialize().
 	/// @warning Only valid after initialize() and execute(), and possibly go().
-	void finalize();
+	/// @returns true if the outermost execution halted normally, false if exceptionally halted.
+	bool finalize();
 	/// Begins execution of a transaction. You must call finalize() following this.
 	/// @returns true if the transaction is done, false if go() must be called.
 	bool execute();
@@ -164,20 +147,20 @@ public:
 	/// @returns total gas used in the transaction/operation.
 	/// @warning Only valid after finalise().
 	u256 gasUsed() const;
-	/// @returns total gas used in the transaction/operation, excluding anything refunded.
-	/// @warning Only valid after finalise().
-	u256 gasUsedNoRefunds() const;
+
+	owning_bytes_ref takeOutput() { return std::move(m_output); }
 
 	/// Set up the executive for evaluating a bare CREATE (contract-creation) operation.
 	/// @returns false iff go() must be called (and thus a VM execution in required).
-	// bool create(Address _txSender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _code, Address _originAddress, u256 _callIdAsset = u256(0));
-	virtual bool create(Address _txSender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _code, Address _originAddress, u256 _callIdAsset = u256(0)); // TODO temp
-
+	virtual bool create(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _code, Address const& _originAddress, u256 _callIdAsset = u256(0));
+	/// @returns false iff go() must be called (and thus a VM execution in required).
+	virtual bool createOpcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _code, Address const& _originAddress, u256 _callIdAsset = u256(0));
+	/// @returns false iff go() must be called (and thus a VM execution in required).
+	virtual bool create2Opcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _code, Address const& _originAddress, u256 const& _salt, u256 _callIdAsset = u256(0));
 	/// Set up the executive for evaluating a bare CALL (message call) operation.
 	/// @returns false iff go() must be called (and thus a VM execution in required).
-	bool call(Address _receiveAddress, Address _txSender, u256 _txValue, u256 _gasPrice, bytesConstRef _txData, u256 _gas, u256 _callIdAsset = u256(0));
-	// bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
-	virtual bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin); // TODO temp
+	bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue, u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas, u256 _callIdAsset = u256(0));
+	virtual bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
 	/// Finalise an operation through accruing the substate into the parent context.
 	void accrueSubState(SubState& _parentContext);
 
@@ -195,7 +178,7 @@ public:
 	u256 gas() const { return m_gas; }
 
 	/// @returns the new address for the created contract in the CREATE operation.
-	h160 newAddress() const { return m_revertLog.address; }
+	Address newAddress() const { return m_newAddress; }
 	/// @returns true iff the operation ended with a VM exception.
 	bool excepted() const { return m_excepted != TransactionException::None; }
 
@@ -205,32 +188,32 @@ public:
 	/// Revert all changes made to the state by this execution.
 	void revert();
 
-	/// Take the account revert log. This makes the revert log in the Executive
-	/// object invalid so no further changes should be made to it.
-	AccountRevertLog takeRevertLog() { return std::move(m_revertLog); }
-
-// private:
 protected: // TODO temp
+	/// @returns false iff go() must be called (and thus a VM execution in required).
+	virtual bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _code, Address const& _originAddress, u256 _callIdAsset = u256(0));
+
 	State& m_s;							///< The state to which this operation/transaction is applied.
 	// TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
 	EnvInfo m_envInfo;					///< Information on the runtime environment.
 	std::shared_ptr<ExtVM> m_ext;		///< The VM externality object for the VM execution or null if no VM is required. shared_ptr used only to allow ExtVM forward reference. This field does *NOT* survive this object.
-	bytesRef m_outRef;					///< Reference to "expected output" buffer.
+	owning_bytes_ref m_output;			///< Execution output.
 	ExecutionResult* m_res = nullptr;	///< Optional storage for execution results.
 
 	unsigned m_depth = 0;				///< The context's call-depth.
 	TransactionException m_excepted = TransactionException::None;	///< Details if the VM's execution resulted in an exception.
-	bigint m_baseGasRequired;				///< The base amount of gas requried for executing this transactions.
+	int64_t m_baseGasRequired;			///< The base amount of gas requried for executing this transaction.
 	u256 m_gas = 0;						///< The gas for EVM code execution. Initial amount before go() execution, final amount after go() execution.
 	u256 m_refunded = 0;				///< The amount of gas refunded.
 
 	Transaction m_t;					///< The original transaction. Set by setup().
 	LogEntries m_logs;					///< The log entries created by this transaction. Set by finalize().
 
-	bigint m_gasCost;
+	u256 m_gasCost;
 	SealEngineFace const& m_sealEngine;
 
-	AccountRevertLog m_revertLog;       ///< The account revert log.
+	bool m_isCreation = false;
+	Address m_newAddress;
+	size_t m_savepoint = 0;
 };
 
 }

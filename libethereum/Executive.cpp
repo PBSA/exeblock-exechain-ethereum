@@ -74,7 +74,7 @@ void StandardTrace::operator()(uint64_t _steps, uint64_t PC, Instruction inst, b
 	if (!m_options.disableStack)
 	{
 		for (auto const& i: vm.stack())
-			stack.append("0x" + toHex(toCompactBigEndian(i, 1)));
+			stack.append(toCompactHexPrefixed(i, 1));
 		r["stack"] = stack;
 	}
 
@@ -112,7 +112,7 @@ void StandardTrace::operator()(uint64_t _steps, uint64_t PC, Instruction inst, b
 		for (unsigned i = 0; i < vm.memory().size(); i += 32)
 		{
 			bytesConstRef memRef(vm.memory().data() + i, 32);
-			memJson.append(toHex(memRef, 2, HexPrefix::DontAdd));
+			memJson.append(toHex(memRef));
 		}
 		r["memory"] = memJson;
 	}
@@ -121,7 +121,7 @@ void StandardTrace::operator()(uint64_t _steps, uint64_t PC, Instruction inst, b
 	{
 		Json::Value storage(Json::objectValue);
 		for (auto const& i: ext.state().storage(ext.myAddress))
-			storage["0x" + toHex(toCompactBigEndian(i.second.first, 1))] = "0x" + toHex(toCompactBigEndian(i.second.second, 1));
+			storage[toCompactHexPrefixed(i.second.first, 1)] = toCompactHexPrefixed(i.second.second, 1);
 		r["storage"] = storage;
 	}
 
@@ -130,6 +130,7 @@ void StandardTrace::operator()(uint64_t _steps, uint64_t PC, Instruction inst, b
 	r["pc"] = toString(PC);
 	r["gas"] = toString(gas);
 	r["gasCost"] = toString(gasCost);
+	r["depth"] = toString(ext.depth);
 	if (!!newMemSize)
 		r["memexpand"] = toString(newMemSize);
 
@@ -143,23 +144,23 @@ string StandardTrace::json(bool _styled) const
 
 Executive::Executive(Block& _s, BlockChain const& _bc, unsigned _level):
 	m_s(_s.mutableState()),
-	m_envInfo(_s.info(), _bc.lastHashes(_s.info().parentHash())),
+	m_envInfo(_s.info(), _bc.lastBlockHashes(), 0),
 	m_depth(_level),
 	m_sealEngine(*_bc.sealEngine())
 {
 }
 
-Executive::Executive(Block& _s, LastHashes const& _lh, unsigned _level):
+Executive::Executive(Block& _s, LastBlockHashesFace const& _lh, unsigned _level):
 	m_s(_s.mutableState()),
-	m_envInfo(_s.info(), _lh),
+	m_envInfo(_s.info(), _lh, 0),
 	m_depth(_level),
 	m_sealEngine(*_s.sealEngine())
 {
 }
 
-Executive::Executive(State& _s, Block const& _block, unsigned _txIndex, BlockChain const& _bc, unsigned _level):
-	m_s(_s = _block.fromPending(_txIndex)),
-	m_envInfo(_block.info(), _bc.lastHashes(_block.info().parentHash()), _txIndex ? _block.receipt(_txIndex - 1).gasUsed() : 0),
+Executive::Executive(State& io_s, Block const& _block, unsigned _txIndex, BlockChain const& _bc, unsigned _level):
+	m_s(createIntermediateState(io_s, _block, _txIndex, _bc)),
+	m_envInfo(_block.info(), _bc.lastBlockHashes(), _txIndex ? _block.receipt(_txIndex - 1).gasUsed() : 0),
 	m_depth(_level),
 	m_sealEngine(*_bc.sealEngine())
 {
@@ -168,11 +169,6 @@ Executive::Executive(State& _s, Block const& _block, unsigned _txIndex, BlockCha
 u256 Executive::gasUsed() const
 {
 	return m_t.gas() - m_gas;
-}
-
-u256 Executive::gasUsedNoRefunds() const
-{
-	return m_t.gas() - m_gas + m_refunded;
 }
 
 void Executive::accrueSubState(SubState& _parentContext)
@@ -184,52 +180,48 @@ void Executive::accrueSubState(SubState& _parentContext)
 void Executive::initialize(Transaction const& _transaction)
 {
 	m_t = _transaction;
-
-	// Avoid transactions that would take us beyond the block gas limit.
-	u256 startGasUsed = m_envInfo.gasUsed();
-	if (startGasUsed + (bigint)m_t.gas() > m_envInfo.gasLimit())
-	{
-		clog(ExecutiveWarnChannel) << "Too much gas used in this block: Require <" << (m_envInfo.gasLimit() - startGasUsed) << " Got" << m_t.gas();
-		m_excepted = TransactionException::BlockGasLimitReached;
-		BOOST_THROW_EXCEPTION(BlockGasLimitReached() << RequirementError((bigint)(m_envInfo.gasLimit() - startGasUsed), (bigint)m_t.gas()));
-	}
-
-	// Check gas cost is enough.
-	m_baseGasRequired = m_t.gasRequired(m_sealEngine.evmSchedule(m_envInfo));
-	if (m_baseGasRequired > m_t.gas())
-	{
-		clog(ExecutiveWarnChannel) << "Not enough gas to pay for the transaction: Require >" << m_baseGasRequired << " Got" << m_t.gas();
-		m_excepted = TransactionException::OutOfGasBase;
-		BOOST_THROW_EXCEPTION(OutOfGasBase() << RequirementError(m_baseGasRequired, (bigint)m_t.gas()));
-	}
-
-	// Avoid invalid transactions.
-	u256 nonceReq;
+	m_baseGasRequired = m_t.baseGasRequired(m_sealEngine.evmSchedule(m_envInfo.number()));
 	try
 	{
-		nonceReq = m_s.getNonce(m_t.sender());
+		m_sealEngine.verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 	}
-	catch (...)
+	catch (Exception const& ex)
 	{
-		clog(ExecutiveWarnChannel) << "Invalid Signature";
-		m_excepted = TransactionException::InvalidSignature;
+		m_excepted = toTransactionException(ex);
 		throw;
 	}
-	if (m_t.nonce() != nonceReq)
-	{
-		clog(ExecutiveWarnChannel) << "Invalid Nonce: Require" << nonceReq << " Got" << m_t.nonce();
-		m_excepted = TransactionException::InvalidNonce;
-		BOOST_THROW_EXCEPTION(InvalidNonce() << RequirementError((bigint)nonceReq, (bigint)m_t.nonce()));
-	}
 
-	// Avoid unaffordable transactions.
-	m_gasCost = (bigint)m_t.gas() * m_t.gasPrice();
-	bigint totalCost = m_t.value() + m_gasCost;
-	if (m_s.balance(m_t.sender()) < totalCost)
+	if (!m_t.hasZeroSignature())
 	{
-		clog(ExecutiveWarnChannel) << "Not enough cash: Require >" << totalCost << "=" << m_t.gas() << "*" << m_t.gasPrice() << "+" << m_t.value() << " Got" << m_s.balance(m_t.sender()) << "for sender: " << m_t.sender();
-		m_excepted = TransactionException::NotEnoughCash;
-		BOOST_THROW_EXCEPTION(NotEnoughCash() << RequirementError(totalCost, (bigint)m_s.balance(m_t.sender())) << errinfo_comment(m_t.sender().abridged()));
+		// Avoid invalid transactions.
+		u256 nonceReq;
+		try
+		{
+			nonceReq = m_s.getNonce(m_t.sender());
+		}
+		catch (InvalidSignature const&)
+		{
+			clog(ExecutiveWarnChannel) << "Invalid Signature";
+			m_excepted = TransactionException::InvalidSignature;
+			throw;
+		}
+		if (m_t.nonce() != nonceReq)
+		{
+			clog(ExecutiveWarnChannel) << "Sender: " << m_t.sender().hex() << " Invalid Nonce: Require" << nonceReq << " Got" << m_t.nonce();
+			m_excepted = TransactionException::InvalidNonce;
+			BOOST_THROW_EXCEPTION(InvalidNonce() << RequirementError((bigint)nonceReq, (bigint)m_t.nonce()));
+		}
+
+		// Avoid unaffordable transactions.
+		bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
+		bigint totalCost = m_t.value() + gasCost;
+		if (m_s.balance(m_t.sender()) < totalCost)
+		{
+			clog(ExecutiveWarnChannel) << "Not enough cash: Require >" << totalCost << "=" << m_t.gas() << "*" << m_t.gasPrice() << "+" << m_t.value() << " Got" << m_s.balance(m_t.sender()) << "for sender: " << m_t.sender();
+			m_excepted = TransactionException::NotEnoughCash;
+			BOOST_THROW_EXCEPTION(NotEnoughCash() << RequirementError(totalCost, (bigint)m_s.balance(m_t.sender())) << errinfo_comment(m_t.sender().hex()));
+		}
+		m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
 	}
 }
 
@@ -238,7 +230,7 @@ bool Executive::execute()
 	// Entry point for a user-executed transaction.
 
 	// Pay...
-	clog(StateDetail) << "Paying" << formatBalance(u256(m_gasCost)) << "from sender for gas (" << m_t.gas() << "gas at" << formatBalance(m_t.gasPrice()) << ")";
+	clog(StateDetail) << "Paying" << formatBalance(m_gasCost) << "from sender for gas (" << m_t.gas() << "gas at" << formatBalance(m_t.gasPrice()) << ")";
 	m_s.subBalance(m_t.sender(), m_gasCost);
 
 	if (m_t.isCreation())
@@ -247,36 +239,57 @@ bool Executive::execute()
 		return call(m_t.receiveAddress(), m_t.sender(), m_t.value(), m_t.gasPrice(), bytesConstRef(&m_t.data()), m_t.gas() - (u256)m_baseGasRequired, m_t.getCallIdAsset());
 }
 
-bool Executive::call(Address _receiveAddress, Address _senderAddress, u256 _value, u256 _gasPrice, bytesConstRef _data, u256 _gas, u256 _callIdAsset)
+bool Executive::call(Address const& _receiveAddress, Address const& _senderAddress, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data, u256 const& _gas, u256 _callIdAsset)
 {
-	CallParameters params{_senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data, {}, {}, _callIdAsset, u256(0), false};
+	CallParameters params{_senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data, {}, _callIdAsset, u256(), false};
 	return call(params, _gasPrice, _senderAddress);
 }
 
 bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address const& _origin)
 {
-	m_s.saveStackSize();
-	// Always remember the sender, needed for revert.
-	m_revertLog.caller = _p.senderAddress;
-
 	// If external transaction.
 	if (m_t)
-		// Increment associated nonce for sender.
-		m_s.incNonce(_p.senderAddress);
-
-	if (m_sealEngine.isPrecompiled(_p.codeAddress))
 	{
-		bigint g = m_sealEngine.costOfPrecompiled(_p.codeAddress, _p.data);
+		// FIXME: changelog contains unrevertable balance change that paid
+		//        for the transaction.
+		// Increment associated nonce for sender.
+		if (_p.senderAddress != MaxAddress || m_envInfo.number() < m_sealEngine.chainParams().constantinopleForkBlock) // EIP86
+			m_s.incNonce(_p.senderAddress);
+	}
+
+	m_savepoint = m_s.savepoint();
+
+	if (m_sealEngine.isPrecompiled(_p.codeAddress, m_envInfo.number()))
+	{
+		bigint g = m_sealEngine.costOfPrecompiled(_p.codeAddress, _p.data, m_envInfo.number());
 		if (_p.gas < g)
 		{
 			m_excepted = TransactionException::OutOfGasBase;
 			// Bail from exception.
+			
+			// Empty precompiled contracts need to be deleted even in case of OOG
+			// because the bug in both Geth and Parity led to deleting RIPEMD precompiled in this case
+			// see https://github.com/ethereum/go-ethereum/pull/3341/files#diff-2433aa143ee4772026454b8abd76b9dd
+			// We mark the account as touched here, so that is can be removed among other touched empty accounts (after tx finalization)
+			if (m_envInfo.number() >= m_sealEngine.chainParams().EIP158ForkBlock)
+				m_s.addBalance(_p.codeAddress, 0);
+			
 			return true;	// true actually means "all finished - nothing more to be done regarding go().
 		}
 		else
 		{
 			m_gas = (u256)(_p.gas - g);
-			m_sealEngine.executePrecompiled(_p.codeAddress, _p.data, _p.out);
+			bytes output;
+			bool success;
+			tie(success, output) = m_sealEngine.executePrecompiled(_p.codeAddress, _p.data, m_envInfo.number());
+			size_t outputSize = output.size();
+			m_output = owning_bytes_ref{std::move(output), 0, outputSize};
+			if (!success)
+			{
+				m_gas = 0;
+				m_excepted = TransactionException::OutOfGas;
+				return true;	// true means no need to run go().
+			}
 		}
 	}
 	else
@@ -284,66 +297,76 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 		m_gas = _p.gas;
 		if (m_s.addressHasCode(_p.codeAddress))
 		{
-//			clog(ExecutiveWarnChannel) << "Call " << _p.receiveAddress;
-			m_outRef = _p.out; // Save ref to expected output buffer to be used in go()
 			bytes const& c = m_s.code(_p.codeAddress);
 			h256 codeHash = m_s.codeHash(_p.codeAddress);
-			m_ext = make_shared<ExtVM>(m_s, m_revertLog, m_envInfo, m_sealEngine, _p.receiveAddress, _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth);
+			m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_sealEngine, _p.receiveAddress, _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, _p.staticCall);
 		}
 	}
 
-	// Remember the transfer params in case revert is needed.
-	m_revertLog.address = _p.receiveAddress;
-	m_revertLog.transfer = _p.valueTransfer;
-	if (m_sealEngine.evmSchedule(m_envInfo).emptinessIsNonexistence())
-		m_revertLog.existed = m_s.accountNonemptyAndExisting(m_revertLog.address);
-	else
-		m_revertLog.existed = m_s.addressInUse(m_revertLog.address);
-
 	// Transfer ether.
-//	clog(ExecutiveWarnChannel) << "Transfer " <<  m_orig.caller << m_orig.address << m_orig.transfer;
-	m_s.transferBalance(m_revertLog.caller, _p.receiveAddress, _p.valueTransfer);
-
-
+	m_s.transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
 	return !m_ext;
 }
-
-bool Executive::create(Address _sender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _init, Address _origin, u256 _callIdAsset)
+bool Executive::create(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
 {
 	_callIdAsset = 0;
-	m_s.saveStackSize();
-	m_revertLog.isCreation = true;
+	// Contract creation by an external account is the same as CREATE opcode
+	return createOpcode(_txSender, _endowment, _gasPrice, _gas, _init, _origin);
+}
 
-	// Always remember the sender, needed for revert.
-	m_revertLog.caller = _sender;
-
+bool Executive::createOpcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
+{
+	_callIdAsset = 0;
 	u256 nonce = m_s.getNonce(_sender);
-	m_s.incNonce(_sender);
+	m_newAddress = right160(sha3(rlpList(_sender, nonce)));
+	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
+}
+
+bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 const& _salt, u256 _callIdAsset)
+{
+	_callIdAsset = 0;
+	m_newAddress = right160(sha3(_sender.asBytes() + toBigEndian(_salt) + sha3(_init).asBytes()));
+	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
+}
+
+bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
+{
+	_callIdAsset = 0;
+	if (_sender != MaxAddress || m_envInfo.number() < m_sealEngine.chainParams().constantinopleForkBlock) // EIP86
+		m_s.incNonce(_sender);
+
+	m_savepoint = m_s.savepoint();
+
+	m_isCreation = true;
 
 	// We can allow for the reverted state (i.e. that with which m_ext is constructed) to contain the m_orig.address, since
 	// we delete it explicitly if we decide we need to revert.
-	m_revertLog.address = right160(sha3(rlpList(_sender, nonce)));
-	m_revertLog.existed = m_s.isAlive(m_revertLog.address);
+
 	m_gas = _gas;
+	bool accountAlreadyExist = (m_s.addressHasCode(m_newAddress) || m_s.getNonce(m_newAddress) > 0);
+	if (accountAlreadyExist)
+	{
+		clog(StateSafeExceptions) << "Address already used: " << m_newAddress;
+		m_gas = 0;
+		m_excepted = TransactionException::AddressAlreadyUsed;
+		revert();
+		m_ext = {}; // cancel the _init execution if there are any scheduled.
+		return !m_ext;
+	}
 
-	m_s.createContract(m_revertLog.address);
-	if (m_envInfo.number() >= m_sealEngine.chainParams().u256Param("EIP158ForkBlock"))
-		m_s.incNonce(m_revertLog.address);
+	// Transfer ether before deploying the code. This will also create new
+	// account if it does not exist yet.
+	m_s.transferBalance(_sender, m_newAddress, _endowment);
 
-	// Execute _init.
+	u256 newNonce = m_s.requireAccountStartNonce();
+	if (m_envInfo.number() >= m_sealEngine.chainParams().EIP158ForkBlock)
+		newNonce += 1;
+	m_s.setNonce(m_newAddress, newNonce);
+
+	// Schedule _init execution if not empty.
 	if (!_init.empty())
-		m_ext = make_shared<ExtVM>(m_s, m_revertLog, m_envInfo, m_sealEngine, m_revertLog.address, _sender, _origin, _endowment, _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth);
+		m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_sealEngine, m_newAddress, _sender, _origin, _endowment, _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth);
 
-	// Remember the transfer params in case revert is needed.
-	m_revertLog.transfer = _endowment;
-
-	// Transfer ether.
-	m_s.transferBalance(m_revertLog.caller, m_revertLog.address, m_revertLog.transfer);
-
-	if (_init.empty())
-		m_s.setCode(m_revertLog.address, {});
-
-//	clog(ExecutiveWarnChannel) << "Create " << m_orig.caller << m_orig.address << m_orig.transfer;
 	return !m_ext;
 }
 
@@ -378,8 +401,9 @@ bool Executive::go(OnOpFunc const& _onOp)
 		{
 			// Create VM instance. Force Interpreter if tracing requested.
 			auto vm = _onOp ? VMFactory::create(VMKind::Interpreter) : VMFactory::create();
-			if (m_revertLog.isCreation)
+			if (m_isCreation)
 			{
+				m_s.clearStorage(m_ext->myAddress);
 				auto out = vm->exec(m_gas, *m_ext, _onOp);
 				if (m_res)
 				{
@@ -402,23 +426,21 @@ bool Executive::go(OnOpFunc const& _onOp)
 					{
 						if (m_res)
 							m_res->codeDeposit = CodeDeposit::Failed;
-						out.clear();
+						out = {};
 					}
 				}
 				if (m_res)
-					m_res->output = out; // copy output to execution result
-				m_s.setCode(m_revertLog.address, std::move(out));
+					m_res->output = out.toVector(); // copy output to execution result
+				m_s.setCode(m_ext->myAddress, out.toVector());
 			}
 			else
-			{
-				if (m_res)
-				{
-					m_res->output = vm->exec(m_gas, *m_ext, _onOp); // take full output
-					bytesConstRef{&m_res->output}.copyTo(m_outRef);
-				}
-				else
-					vm->exec(m_gas, *m_ext, m_outRef, _onOp); // take only expected output
-			}
+				m_output = vm->exec(m_gas, *m_ext, _onOp);
+		}
+		catch (RevertInstruction& _e)
+		{
+			revert();
+			m_output = _e.output();
+			m_excepted = TransactionException::RevertInstruction;
 		}
 		catch (VMException const& _e)
 		{
@@ -444,6 +466,11 @@ bool Executive::go(OnOpFunc const& _onOp)
 			// Another solution would be to reject this transaction, but that also
 			// has drawbacks. Essentially, the amount of ram has to be increased here.
 		}
+
+		if (m_res && m_output)
+			// Copy full output:
+			m_res->output = m_output.toVector();
+
 #if ETH_TIMED_EXECUTIONS
 		cnote << "VM took:" << t.elapsed() << "; gas used: " << (sgas - m_endGas);
 #endif
@@ -451,7 +478,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 	return true;
 }
 
-void Executive::finalize()
+bool Executive::finalize()
 {
 	// Accumulate refunds for suicides.
 	if (m_ext)
@@ -479,68 +506,14 @@ void Executive::finalize()
 	if (m_ext)
 		m_logs = m_ext->sub.logs;
 
-//	cwarn << "m_gas" << m_gas << "m_refunded" << m_refunded << "gasUsed()" << gasUsed();
-
 	if (m_res) // Collect results
 	{
 		m_res->gasUsed = gasUsed();
 		m_res->excepted = m_excepted; // TODO: m_except is used only in ExtVM::call
-		m_res->newAddress = m_revertLog.address;
+		m_res->newAddress = m_newAddress;
 		m_res->gasRefunded = m_ext ? m_ext->sub.refunds : 0;
 	}
-}
-
-namespace
-{
-void revertAccountChanges(State& _state, AccountRevertLog const& _changes)
-{
-	// Firstly, revert attached successful calls.
-	for (auto it = _changes.children.rbegin(); it != _changes.children.rend(); ++it)
-		revertAccountChanges(_state, *it);
-
-	if (_changes.transfer)
-	{
-		// FIXME: In case of CREATE, not need to revert transfer and storage,
-		// as we are going to kill the whole account.
-		// TODO: Split transfer on sender and receiver parts.
-		_state.subBalance(_changes.address, _changes.transfer); 
-		_state.addBalance(_changes.caller, _changes.transfer);
-	}
-
-	// Revert nonce if dumped.
-	if (_changes.nonceInc > 0)
-		_state.setNonce(_changes.address, _state.getNonce(_changes.address) - _changes.nonceInc);
-
-	if (_changes.isCreation)
-	{
-		if (_changes.existed)
-		{
-			// The account was alive before CREATE (prefund) we have to
-			// reset some params. This is not very precise but should work in
-			// real live networks where we don't anticipate hash collisions.
-			_state.setNonce(_changes.address, 0);
-			_state.setCode(_changes.address, {});
-			_state.clearStorageChanges(_changes.address);
-			// Also untouch it because it classify for being cleared any more.
-			_state.untouch(_changes.address);
-		}
-		else
-			// If the account was not existing before we can safely kill it.
-			_state.kill(_changes.address);
-	}
-	else
-	{
-		// Restore original storage for this account. The order does not matter.
-		for (auto& item: _changes.storage)
-			_state.setStorage(_changes.address, item.first, item.second);
-
-		if (!_changes.existed)
-			_state.untouch(_changes.address);
-	}
-
-	if (_changes.selfdestructBeneficiary)
-		_state.untouch(_changes.selfdestructBeneficiary);
-}
+	return (m_excepted == TransactionException::None);
 }
 
 void Executive::revert()
@@ -548,6 +521,7 @@ void Executive::revert()
 	if (m_ext)
 		m_ext->sub.clear();
 
-	revertAccountChanges(m_s, m_revertLog);
-	m_revertLog.address = {};
+	// Set result address to the null one.
+	m_newAddress = {};
+	m_s.rollback(m_savepoint);
 }

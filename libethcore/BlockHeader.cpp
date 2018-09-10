@@ -23,6 +23,7 @@
 #include <libdevcore/Log.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/TrieDB.h>
+#include <libdevcore/MemoryDB.h>
 #include <libdevcore/TrieHash.h>
 #include <libethcore/Common.h>
 #include "Exceptions.h"
@@ -42,6 +43,60 @@ BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _
 	populate(header);
 }
 
+BlockHeader::BlockHeader(BlockHeader const& _other) :
+	m_parentHash(_other.parentHash()),
+	m_sha3Uncles(_other.sha3Uncles()),
+	m_stateRoot(_other.stateRoot()),
+	m_transactionsRoot(_other.transactionsRoot()),
+	m_receiptsRoot(_other.receiptsRoot()),
+	m_logBloom(_other.logBloom()),
+	m_number(_other.number()),
+	m_gasLimit(_other.gasLimit()),
+	m_gasUsed(_other.gasUsed()),
+	m_extraData(_other.extraData()),
+	m_timestamp(_other.timestamp()),
+	m_author(_other.author()),
+	m_difficulty(_other.difficulty()),
+	m_seal(_other.seal()),
+	m_hash(_other.hashRawRead()),
+	m_hashWithout(_other.hashWithoutRawRead())
+{
+	assert(*this == _other);
+}
+
+BlockHeader& BlockHeader::operator=(BlockHeader const& _other)
+{
+	if (this == &_other)
+		return *this;
+	m_parentHash = _other.parentHash();
+	m_sha3Uncles = _other.sha3Uncles();
+	m_stateRoot = _other.stateRoot();
+	m_transactionsRoot = _other.transactionsRoot();
+	m_receiptsRoot = _other.receiptsRoot();
+	m_logBloom = _other.logBloom();
+	m_number = _other.number();
+	m_gasLimit = _other.gasLimit();
+	m_gasUsed = _other.gasUsed();
+	m_extraData = _other.extraData();
+	m_timestamp = _other.timestamp();
+	m_author = _other.author();
+	m_difficulty = _other.difficulty();
+	std::vector<bytes> seal = _other.seal();
+	{
+		Guard l(m_sealLock);
+		m_seal = std::move(seal);
+	}
+	h256 hash = _other.hashRawRead();
+	h256 hashWithout = _other.hashWithoutRawRead();
+	{
+		Guard l(m_hashLock);
+		m_hash = std::move(hash);
+		m_hashWithout = std::move(hashWithout);
+	}
+	assert(*this == _other);
+	return *this;
+}
+
 void BlockHeader::clear()
 {
 	m_parentHash = h256();
@@ -55,7 +110,7 @@ void BlockHeader::clear()
 	m_number = 0;
 	m_gasLimit = 0;
 	m_gasUsed = 0;
-	m_timestamp = Invalid256;
+	m_timestamp = -1;
 	m_extraData.clear();
 	m_seal.clear();
 	noteDirty();
@@ -64,6 +119,7 @@ void BlockHeader::clear()
 h256 BlockHeader::hash(IncludeSeal _i) const
 {
 	h256 dummy;
+	Guard l(m_hashLock);
 	h256& memo = _i == WithSeal ? m_hash : _i == WithoutSeal ? m_hashWithout : dummy;
 	if (!memo)
 	{
@@ -125,10 +181,10 @@ void BlockHeader::populate(RLP const& _header)
 		m_receiptsRoot = _header[field = 5].toHash<h256>(RLP::VeryStrict);
 		m_logBloom = _header[field = 6].toHash<LogBloom>(RLP::VeryStrict);
 		m_difficulty = _header[field = 7].toInt<u256>();
-		m_number = _header[field = 8].toInt<u256>();
+		m_number = _header[field = 8].toPositiveInt64();
 		m_gasLimit = _header[field = 9].toInt<u256>();
 		m_gasUsed = _header[field = 10].toInt<u256>();
-		m_timestamp = _header[field = 11].toInt<u256>();
+		m_timestamp = _header[field = 11].toPositiveInt64();
 		m_extraData = _header[field = 12].toBytes();
 		m_seal.clear();
 		for (unsigned i = 13; i < _header.itemCount(); ++i)
