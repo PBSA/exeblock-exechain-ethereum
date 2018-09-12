@@ -1,7 +1,7 @@
 # cryptopp has very bad CMakeLists.txt config.
 # We have to enforce "cross compiling mode" there by setting CMAKE_SYSTEM_VERSION=NO
 # to any "false" value.
-hunter_config(cryptopp VERSION ${HUNTER_cryptopp_VERSION} CMAKE_ARGS CMAKE_SYSTEM_VERSION=NO)
+hunter_config(cryptopp VERSION ${HUNTER_cryptopp_VERSION} CMAKE_ARGS CMAKE_SYSTEM_VERSION=NO CMAKE_POSITION_INDEPENDENT_CODE=ON)
 
 hunter_config(
     libjson-rpc-cpp
@@ -15,6 +15,9 @@ hunter_config(
     TCP_SOCKET_CLIENT=NO
     HTTP_SERVER=NO
     HTTP_CLIENT=NO
+    CMAKE_POSITION_INDEPENDENT_CODE=ON
 )
 
-hunter_config(Boost VERSION 1.65.1)
+hunter_config(Boost VERSION 1.65.1 CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=ON)
+hunter_config(jsoncpp VERSION 1.8.0 CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=ON)
+hunter_config(Snappy VERSION 1.1.6-p0 CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=ON)

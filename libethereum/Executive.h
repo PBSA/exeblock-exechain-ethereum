@@ -19,8 +19,8 @@
 #pragma once
 
 #include <functional>
-// #include <json/json.h> // TODO temp
-#include "deps/jsoncpp/include/json/json.h" // TODO temp
+#include <json/json.h> // TODO temp
+// #include "deps/jsoncpp/include/json/json.h" // TODO temp
 #include <libdevcore/Log.h>
 #include <libethcore/Common.h>
 #include <libevm/VMFace.h>
