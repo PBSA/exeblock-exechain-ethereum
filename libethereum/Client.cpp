@@ -41,6 +41,28 @@ namespace fs = boost::filesystem;
 
 static_assert(BOOST_VERSION >= 106400, "Wrong boost headers version");
 
+namespace
+{
+std::string filtersToString(h256Hash const& _fs)
+{
+    std::stringstream str;
+    str << "{";
+    unsigned i = 0;
+    for (h256 const& f : _fs)
+    {
+        str << (i++ ? ", " : "");
+        if (f == PendingChangedFilter)
+            str << "pending";
+        else if (f == ChainChangedFilter)
+            str << "chain";
+        else
+            str << f;
+    }
+    str << "}";
+    return str.str();
+}
+}  // namespace
+
 std::ostream& dev::eth::operator<<(std::ostream& _out, ActivityReport const& _r)
 {
     _out << "Since " << toString(_r.since) << " (" << std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _r.since).count();
@@ -48,23 +70,10 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, ActivityReport const& _r)
     return _out;
 }
 
-#if defined(_WIN32)
-const char* ClientNote::name() { return EthTeal "^" EthBlue " i"; }
-const char* ClientChat::name() { return EthTeal "^" EthWhite " o"; }
-const char* ClientTrace::name() { return EthTeal "^" EthGray " O"; }
-const char* ClientDetail::name() { return EthTeal "^" EthCoal " 0"; }
-#else
-const char* ClientNote::name() { return EthTeal "⧫" EthBlue " ℹ"; }
-const char* ClientChat::name() { return EthTeal "⧫" EthWhite " ◌"; }
-const char* ClientTrace::name() { return EthTeal "⧫" EthGray " ◎"; }
-const char* ClientDetail::name() { return EthTeal "⧫" EthCoal " ●"; }
-#endif
-
-Client::Client(ChainParams const& _params, int _networkID, p2p::Host* _host,
+Client::Client(ChainParams const& _params, int _networkID, p2p::Host& _host,
     std::shared_ptr<GasPricer> _gpForAdoption, fs::path const& _dbPath,
     fs::path const& _snapshotPath, WithExisting _forceAction, TransactionQueue::Limits const& _l)
-  : ClientBase(),
-    Worker("eth", 0),
+  : Worker("eth", 0),
     m_bc(_params, _dbPath, _forceAction,
         [](unsigned d, unsigned t) {
             std::cerr << "REVISING BLOCKCHAIN: Processed " << d << " of " << t << "...\r";
@@ -80,11 +89,13 @@ Client::Client(ChainParams const& _params, int _networkID, p2p::Host* _host,
 
 Client::~Client()
 {
+    m_signalled.notify_all(); // to wake up the thread from Client::doWork()
     stopWorking();
     terminate();
 }
 
-void Client::init(p2p::Host* _extNet, fs::path const& _dbPath, fs::path const& _snapshotDownloadPath, WithExisting _forceAction, u256 _networkId)
+void Client::init(p2p::Host& _extNet, fs::path const& _dbPath,
+    fs::path const& _snapshotDownloadPath, WithExisting _forceAction, u256 _networkId)
 {
     DEV_TIMED_FUNCTION_ABOVE(500);
 
@@ -111,6 +122,7 @@ void Client::init(p2p::Host* _extNet, fs::path const& _dbPath, fs::path const& _
     bc().setOnBlockImport([=](BlockHeader const& _info) {
         if (auto h = m_host.lock())
             h->onBlockImported(_info);
+        m_onBlockImport(_info);
     });
 
     if (_forceAction == WithExisting::Rescue)
@@ -121,12 +133,10 @@ void Client::init(p2p::Host* _extNet, fs::path const& _dbPath, fs::path const& _
     // create Ethereum capability only if we're not downloading the snapshot
     if (_snapshotDownloadPath.empty())
     {
-        auto host = _extNet->registerCapability(
-            make_shared<EthereumHost>(bc(), m_stateDB, m_tq, m_bq, _networkId));
-        m_host = host;
-
-        _extNet->addCapability(host, EthereumHost::staticName(),
-            EthereumHost::c_oldProtocolVersion);  // TODO: remove this once v61+ protocol is common
+        auto ethHostCapability =
+            make_shared<EthereumHost>(_extNet, bc(), m_stateDB, m_tq, m_bq, _networkId);
+        _extNet.registerCapability(ethHostCapability);
+        m_host = ethHostCapability;
     }
 
     // create Warp capability if we either download snapshot or can give out snapshot
@@ -136,8 +146,10 @@ void Client::init(p2p::Host* _extNet, fs::path const& _dbPath, fs::path const& _
     {
         std::shared_ptr<SnapshotStorageFace> snapshotStorage(
             importedSnapshotExists ? createSnapshotStorage(importedSnapshot) : nullptr);
-        m_warpHost = _extNet->registerCapability(make_shared<WarpHostCapability>(
-            bc(), _networkId, _snapshotDownloadPath, snapshotStorage));
+        auto warpHostCapability = make_shared<WarpHostCapability>(
+            _extNet, bc(), _networkId, _snapshotDownloadPath, snapshotStorage);
+        _extNet.registerCapability(warpHostCapability);
+        m_warpHost = warpHostCapability;
     }
 
     if (_dbPath.size())
@@ -224,7 +236,7 @@ void Client::startedWorking()
 {
     // Synchronise the state according to the head of the block chain.
     // TODO: currently it contains keys for *all* blocks. Make it remove old ones.
-    clog(ClientTrace) << "startedWorking()";
+    LOG(m_loggerDetail) << "startedWorking()";
 
     DEV_WRITE_GUARDED(x_preSeal)
         m_preSeal.sync(bc());
@@ -259,6 +271,7 @@ void Client::reopenChain(WithExisting _we)
 
 void Client::reopenChain(ChainParams const& _p, WithExisting _we)
 {
+    m_signalled.notify_all(); // to wake up the thread from Client::doWork()
     bool wasSealing = wouldSeal();
     if (wasSealing)
         stopSealing();
@@ -273,7 +286,6 @@ void Client::reopenChain(ChainParams const& _p, WithExisting _we)
         WriteGuard l2(x_preSeal);
         WriteGuard l3(x_working);
 
-        auto author = m_preSeal.author();   // backup and restore author.
         m_preSeal = Block(chainParams().accountStartNonce);
         m_postSeal = Block(chainParams().accountStartNonce);
         m_working = Block(chainParams().accountStartNonce);
@@ -283,7 +295,7 @@ void Client::reopenChain(ChainParams const& _p, WithExisting _we)
         m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we);
 
         m_preSeal = bc().genesisBlock(m_stateDB);
-        m_preSeal.setAuthor(author);
+        m_preSeal.setAuthor(_p.author);
         m_postSeal = m_preSeal;
         m_working = Block(chainParams().accountStartNonce);
     }
@@ -320,25 +332,6 @@ void Client::clearPending()
     startSealing();
     h256Hash changeds;
     noteChanged(changeds);
-}
-
-template <class S, class T>
-static S& filtersStreamOut(S& _out, T const& _fs)
-{
-    _out << "{";
-    unsigned i = 0;
-    for (h256 const& f: _fs)
-    {
-        _out << (i++ ? ", " : "");
-        if (f == PendingChangedFilter)
-            _out << LogTag::Special << "pending";
-        else if (f == ChainChangedFilter)
-            _out << LogTag::Special << "chain";
-        else
-            _out << f;
-    }
-    _out << "}";
-    return _out;
 }
 
 void Client::appendFromNewPending(TransactionReceipt const& _receipt, h256Hash& io_changed, h256 _sha3)
@@ -403,7 +396,8 @@ void Client::syncBlockQueue()
 
     if (count)
     {
-        clog(ClientNote) << count << "blocks imported in" << unsigned(elapsed * 1000) << "ms (" << (count / elapsed) << "blocks/s) in #" << bc().number();
+        LOG(m_logger) << count << " blocks imported in " << unsigned(elapsed * 1000) << " ms ("
+                      << (count / elapsed) << " blocks/s) in #" << bc().number();
     }
 
     if (elapsed > c_targetDuration * 1.1 && count > c_syncMin)
@@ -468,10 +462,11 @@ void Client::onDeadBlocks(h256s const& _blocks, h256Hash& io_changed)
     // insert transactions that we are declaring the dead part of the chain
     for (auto const& h: _blocks)
     {
-        clog(ClientTrace) << "Dead block:" << h;
+        LOG(m_loggerDetail) << "Dead block: " << h;
         for (auto const& t: bc().transactions(h))
         {
-            clog(ClientTrace) << "Resubmitting dead-block transaction " << Transaction(t, CheckTransaction::None);
+            LOG(m_loggerDetail) << "Resubmitting dead-block transaction "
+                                << Transaction(t, CheckTransaction::None);
             ctrace << "Resubmitting dead-block transaction " << Transaction(t, CheckTransaction::None);
             m_tq.import(t, IfDropped::Retry);
         }
@@ -485,7 +480,7 @@ void Client::onNewBlocks(h256s const& _blocks, h256Hash& io_changed)
 {
     // remove transactions from m_tq nicely rather than relying on out of date nonce later on.
     for (auto const& h: _blocks)
-        clog(ClientTrace) << "Live block:" << h;
+        LOG(m_loggerDetail) << "Live block: " << h;
 
     if (auto h = m_host.lock())
         h->noteNewBlocks();
@@ -499,9 +494,12 @@ void Client::resyncStateFromChain()
     DEV_READ_GUARDED(x_working)
         if (bc().currentHash() == m_working.info().parentHash())
             return;
-        
-    // RESTART MINING
 
+    restartMining();
+}
+
+void Client::restartMining()
+{
     bool preChanged = false;
     Block newPreMine(chainParams().accountStartNonce);
     DEV_READ_GUARDED(x_preSeal)
@@ -518,10 +516,10 @@ void Client::resyncStateFromChain()
             m_working = newPreMine;
         DEV_READ_GUARDED(x_postSeal)
             if (!m_postSeal.isSealed() || m_postSeal.info().hash() != newPreMine.info().parentHash())
-                for (auto const& t: m_postSeal.pending())
+                for (auto const& t : m_postSeal.pending())
                 {
-                    clog(ClientTrace) << "Resubmitting post-seal transaction " << t;
-//                      ctrace << "Resubmitting post-seal transaction " << t;
+                    LOG(m_loggerDetail) << "Resubmitting post-seal transaction " << t;
+                    //                      ctrace << "Resubmitting post-seal transaction " << t;
                     auto ir = m_tq.import(t, IfDropped::Retry);
                     if (ir != ImportResult::Success)
                         onTransactionQueueReady();
@@ -559,7 +557,7 @@ void Client::onChainChanged(ImportRoute const& _ir)
     onDeadBlocks(_ir.deadBlocks, changeds);
     for (auto const& t: _ir.goodTranactions)
     {
-        clog(ClientTrace) << "Safely dropping transaction " << t.sha3();
+        LOG(m_loggerDetail) << "Safely dropping transaction " << t.sha3();
         m_tq.dropGood(t);
     }
     onNewBlocks(_ir.liveBlocks, changeds);
@@ -575,7 +573,7 @@ bool Client::remoteActive() const
 
 void Client::onPostStateChanged()
 {
-    clog(ClientTrace) << "Post state changed.";
+    LOG(m_loggerDetail) << "Post state changed.";
     m_signalled.notify_all();
     m_remoteWorking = false;
 }
@@ -584,14 +582,14 @@ void Client::startSealing()
 {
     if (m_wouldSeal == true)
         return;
-    clog(ClientNote) << "Mining Beneficiary: " << author();
+    LOG(m_logger) << "Mining Beneficiary: " << author();
     if (author())
     {
         m_wouldSeal = true;
         m_signalled.notify_all();
     }
     else
-        clog(ClientNote) << "You need to set an author in order to seal!";
+        LOG(m_logger) << "You need to set an author in order to seal!";
 }
 
 void Client::rejigSealing()
@@ -602,14 +600,16 @@ void Client::rejigSealing()
         {
             m_wouldButShouldnot = false;
 
-            clog(ClientTrace) << "Rejigging seal engine...";
+            LOG(m_loggerDetail) << "Rejigging seal engine...";
             DEV_WRITE_GUARDED(x_working)
             {
                 if (m_working.isSealed())
                 {
-                    clog(ClientNote) << "Tried to seal sealed block...";
+                    LOG(m_logger) << "Tried to seal sealed block...";
                     return;
                 }
+                // TODO is that needed? we have "Generating seal on" below
+                LOG(m_loggerDetail) << "Starting to seal block #" << m_working.info().number();
                 m_working.commitToSeal(bc(), m_extraData);
             }
             DEV_READ_GUARDED(x_working)
@@ -621,11 +621,14 @@ void Client::rejigSealing()
 
             if (wouldSeal())
             {
-                sealEngine()->onSealGenerated([=](bytes const& header){
-                    if (!this->submitSealed(header))
-                        clog(ClientNote) << "Submitting block failed...";
+                sealEngine()->onSealGenerated([=](bytes const& _header) {
+                    LOG(m_logger) << "Block sealed #" << BlockHeader(_header, HeaderData).number();
+                    if (this->submitSealed(_header))
+                        m_onBlockSealed(_header);
+                    else
+                        LOG(m_logger) << "Submitting block failed...";
                 });
-                ctrace << "Generating seal on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number();
+                ctrace << "Generating seal on " << m_sealingInfo.hash(WithoutSeal) << " #" << m_sealingInfo.number();
                 sealEngine()->generateSeal(m_sealingInfo);
             }
         }
@@ -640,20 +643,24 @@ void Client::noteChanged(h256Hash const& _filters)
 {
     Guard l(x_filtersWatches);
     if (_filters.size())
-        filtersStreamOut(cwatch << "noteChanged:", _filters);
+        LOG(m_loggerWatch) << "noteChanged: " << filtersToString(_filters);
     // accrue all changes left in each filter into the watches.
     for (auto& w: m_watches)
         if (_filters.count(w.second.id))
         {
             if (m_filters.count(w.second.id))
             {
-                cwatch << "!!!" << w.first << w.second.id.abridged();
+                LOG(m_loggerWatch) << "!!! " << w.first << " " << w.second.id.abridged();
                 w.second.changes += m_filters.at(w.second.id).changes;
             }
             else if (m_specialFilters.count(w.second.id))
                 for (h256 const& hash: m_specialFilters.at(w.second.id))
                 {
-                    cwatch << "!!!" << w.first << LogTag::Special << (w.second.id == PendingChangedFilter ? "pending" : w.second.id == ChainChangedFilter ? "chain" : "???");
+                    LOG(m_loggerWatch)
+                        << "!!! " << w.first << " "
+                        << (w.second.id == PendingChangedFilter ?
+                                   "pending" :
+                                   w.second.id == ChainChangedFilter ? "chain" : "???");
                     w.second.changes.push_back(LocalisedLogEntry(SpecialLogEntry, hash));
                 }
         }
@@ -693,7 +700,7 @@ void Client::doWork(bool _doWait)
         isSealed = m_working.isSealed();
     // If the block is sealed, we have to wait for it to tickle through the block queue
     // (which only signals as wanting to be synced if it is ready).
-    if (!m_syncBlockQueue && !m_syncTransactionQueue && (_doWait || isSealed))
+    if (!m_syncBlockQueue && !m_syncTransactionQueue && (_doWait || isSealed) && isWorking())
     {
         std::unique_lock<std::mutex> l(x_signalled);
         m_signalled.wait_for(l, chrono::seconds(1));
@@ -709,7 +716,7 @@ void Client::tick()
         m_bq.tick();
         m_lastTick = chrono::system_clock::now();
         if (m_report.ticks == 15)
-            clog(ClientTrace) << activityReport();
+            LOG(m_loggerDetail) << activityReport();
     }
 }
 
@@ -724,7 +731,12 @@ void Client::checkWatchGarbage()
                 if (m_watches[key].lastPoll != chrono::system_clock::time_point::max() && chrono::system_clock::now() - m_watches[key].lastPoll > chrono::seconds(20))
                 {
                     toUninstall.push_back(key);
-                    clog(ClientTrace) << "GC: Uninstall" << key << "(" << chrono::duration_cast<chrono::seconds>(chrono::system_clock::now() - m_watches[key].lastPoll).count() << "s old)";
+                    LOG(m_loggerDetail)
+                        << "GC: Uninstall " << key << " ("
+                        << chrono::duration_cast<chrono::seconds>(
+                               chrono::system_clock::now() - m_watches[key].lastPoll)
+                               .count()
+                        << " s old)";
                 }
         for (auto i: toUninstall)
             uninstallWatch(i);
@@ -780,6 +792,11 @@ void Client::flushTransactions()
     doWork();
 }
 
+Transactions Client::pending() const
+{
+    return m_tq.topTransactions(m_tq.status().current);
+}
+
 SyncStatus Client::syncStatus() const
 {
     auto h = m_host.lock();
@@ -788,6 +805,24 @@ SyncStatus Client::syncStatus() const
     SyncStatus status = h->status();
     status.majorSyncing = isMajorSyncing();
     return status;
+}
+
+TransactionSkeleton Client::populateTransactionWithDefaults(TransactionSkeleton const& _t) const
+{
+    TransactionSkeleton ret(_t);
+
+    // Default gas value meets the intrinsic gas requirements of both
+    // send value and create contract transactions and is the same default
+    // value used by geth and testrpc.
+    const u256 defaultTransactionGas = 90000;
+    if (ret.nonce == Invalid256)
+        ret.nonce = max<u256>(postSeal().transactionsFrom(ret.from), m_tq.maxNonce(ret.from));
+    if (ret.gasPrice == Invalid256)
+        ret.gasPrice = gasBidPrice();
+    if (ret.gas == Invalid256)
+        ret.gas = defaultTransactionGas;
+
+    return ret;
 }
 
 bool Client::submitSealed(bytes const& _header)
@@ -828,25 +863,47 @@ void Client::rewind(unsigned _n)
     auto h = m_host.lock();
     if (h)
         h->reset();
+    m_tq.clear();
+    m_bq.clear();
 }
 
-pair<h256, Address> Client::submitTransaction(TransactionSkeleton const& _t, Secret const& _secret)
+h256 Client::submitTransaction(TransactionSkeleton const& _t, Secret const& _secret)
+{
+    TransactionSkeleton ts = populateTransactionWithDefaults(_t);
+    ts.from = toAddress(_secret);
+    Transaction t(ts, _secret);
+    return importTransaction(t);
+}
+
+h256 Client::importTransaction(Transaction const& _t)
 {
     prepareForTransaction();
 
-    TransactionSkeleton ts(_t);
-    ts.from = toAddress(_secret);
-    if (_t.nonce == Invalid256)
-        ts.nonce = max<u256>(postSeal().transactionsFrom(ts.from), m_tq.maxNonce(ts.from));
-    if (ts.gasPrice == Invalid256)
-        ts.gasPrice = gasBidPrice();
-    if (ts.gas == Invalid256)
-        ts.gas = min<u256>(gasLimitRemaining() / 5, balanceAt(ts.from) / ts.gasPrice);
+    // Use the Executive to perform basic validation of the transaction
+    // (e.g. transaction signature, account balance) using the state of
+    // the latest block in the client's blockchain. This can throw but
+    // we'll catch the exception at the RPC level.
+    Block currentBlock = block(bc().currentHash());
+    Executive e(currentBlock, bc());
+    e.initialize(_t);
+    ImportResult res = m_tq.import(_t.rlp());
+    switch (res)
+    {
+        case ImportResult::Success:
+            break;
+        case ImportResult::ZeroSignature:
+            BOOST_THROW_EXCEPTION(ZeroSignatureTransaction());
+        case ImportResult::OverbidGasPrice:
+            BOOST_THROW_EXCEPTION(GasPriceTooLow());
+        case ImportResult::AlreadyKnown:
+            BOOST_THROW_EXCEPTION(PendingTransactionAlreadyExists());
+        case ImportResult::AlreadyInChain:
+            BOOST_THROW_EXCEPTION(TransactionAlreadyInChain());
+        default:
+            BOOST_THROW_EXCEPTION(UnknownTransactionValidationError());
+    }
 
-    Transaction t(ts, _secret);
-    m_tq.import(t.rlp());
-
-    return make_pair(t.sha3(), toAddress(ts.from, ts.nonce));
+    return _t.sha3();
 }
 
 // TODO: remove try/catch, allow exceptions
@@ -855,7 +912,7 @@ ExecutionResult Client::call(Address const& _from, u256 _value, Address _dest, b
     ExecutionResult ret;
     try
     {
-        Block temp = block(_blockNumber);
+        Block temp = blockByNumber(_blockNumber);
         u256 nonce = max<u256>(temp.transactionsFrom(_from), m_tq.maxNonce(_from));
         u256 gas = _gas == Invalid256 ? gasLimitRemaining() : _gas;
         u256 gasPrice = _gasPrice == Invalid256 ? gasBidPrice() : _gasPrice;

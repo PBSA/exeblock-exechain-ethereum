@@ -28,8 +28,8 @@ namespace eth
 class WarpHostCapability : public p2p::HostCapability<WarpPeerCapability>, Worker
 {
 public:
-    WarpHostCapability(BlockChain const& _blockChain, u256 const& _networkId,
-        boost::filesystem::path const& _snapshotDownloadPath,
+    WarpHostCapability(p2p::Host const& _host, BlockChain const& _blockChain,
+        u256 const& _networkId, boost::filesystem::path const& _snapshotDownloadPath,
         std::shared_ptr<SnapshotStorageFace> _snapshotStorage);
     ~WarpHostCapability();
 
@@ -37,10 +37,14 @@ public:
     u256 networkId() const { return m_networkId; }
 
 protected:
-    std::shared_ptr<p2p::Capability> newPeerCapability(std::shared_ptr<p2p::SessionFace> const& _s,
-        unsigned _idOffset, p2p::CapDesc const& _cap) override;
+    std::shared_ptr<p2p::PeerCapabilityFace> newPeerCapability(
+        std::shared_ptr<p2p::SessionFace> const& _s, unsigned _idOffset,
+        p2p::CapDesc const& _cap) override;
 
 private:
+    std::shared_ptr<WarpPeerObserverFace> createPeerObserver(
+        boost::filesystem::path const& _snapshotDownloadPath) const;
+
     void doWork() override;
 
     BlockChain const& m_blockChain;

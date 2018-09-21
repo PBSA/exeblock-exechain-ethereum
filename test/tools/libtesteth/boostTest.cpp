@@ -59,27 +59,27 @@ void customTestSuite()
     if (opt.singleTestFile.is_initialized())
     {
         boost::filesystem::path file(opt.singleTestFile.get());
-        if (opt.rCurrentTestSuite.find_first_of("GeneralStateTests") != std::string::npos)
+        if (opt.rCurrentTestSuite.find("GeneralStateTests") != std::string::npos)
         {
             dev::test::StateTestSuite suite;
             suite.runTestWithoutFiller(file);
         }
-        else if (opt.rCurrentTestSuite.find_first_of("BlockchainTests") != std::string::npos)
+        else if (opt.rCurrentTestSuite.find("BlockchainTests") != std::string::npos)
         {
             dev::test::BlockchainTestSuite suite;
             suite.runTestWithoutFiller(file);
         }
-        else if (opt.rCurrentTestSuite.find_first_of("TransitionTests") != std::string::npos)
+        else if (opt.rCurrentTestSuite.find("TransitionTests") != std::string::npos)
         {
             dev::test::TransitionTestsSuite suite;
             suite.runTestWithoutFiller(file);
         }
-        else if (opt.rCurrentTestSuite.find_first_of("VMtests") != std::string::npos)
+        else if (opt.rCurrentTestSuite.find("VMtests") != std::string::npos)
         {
             dev::test::VmTestSuite suite;
             suite.runTestWithoutFiller(file);
         }
-        else if (opt.rCurrentTestSuite.find_first_of("TransactionTests") != std::string::npos)
+        else if (opt.rCurrentTestSuite.find("TransactionTests") != std::string::npos)
         {
             dev::test::TransactionTestSuite suite;
             suite.runTestWithoutFiller(file);
@@ -133,9 +133,9 @@ int main(int argc, const char* argv[])
     {
         dev::test::Options::get(argc, argv);
     }
-    catch (dev::test::Options::InvalidOption const& e)
+    catch (dev::test::InvalidOption const& e)
     {
-        std::cerr << e.what() << "\n";
+        std::cerr << *boost::get_error_info<errinfo_comment>(e) << "\n";
         exit(1);
     }
 
@@ -180,6 +180,7 @@ int main(int argc, const char* argv[])
         framework::master_test_suite().add(ts1);
     }
 
+    std::cout << "Running tests using path: " << test::getTestPath() << std::endl;
     int result = 0;
     auto fakeInit = [](int, char* []) -> boost::unit_test::test_suite* { return nullptr; };
     if (opt.jsontrace || opt.vmtrace || opt.statediff)

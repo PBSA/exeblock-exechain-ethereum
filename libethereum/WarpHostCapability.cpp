@@ -28,13 +28,6 @@ namespace
 {
 static size_t const c_freePeerBufferSize = 32;
 
-struct SnapshotLog : public LogChannel
-{
-    static char const* name() { return "SNAP"; }
-    static int const verbosity = 9;
-    static const bool debug = false;
-};
-
 bool validateManifest(RLP const& _manifestRlp)
 {
     if (!_manifestRlp.isList() || _manifestRlp.itemCount() != 1)
@@ -55,7 +48,7 @@ h256 snapshotBlockHash(RLP const& _manifestRlp)
 class WarpPeerObserver : public WarpPeerObserverFace
 {
 public:
-    WarpPeerObserver(WarpHostCapability& _host, BlockChain const& _blockChain,
+    WarpPeerObserver(WarpHostCapability const& _host, BlockChain const& _blockChain,
         boost::filesystem::path const& _snapshotPath)
       : m_hostProtocolVersion(_host.protocolVersion()),
         m_hostNetworkId(_host.networkId()),
@@ -118,10 +111,10 @@ public:
             writeFile((boost::filesystem::path(m_snapshotDir) / toHex(hash)).string(),
                 data.toBytesConstRef());
 
-            clog(SnapshotLog) << "Saved chunk" << hash << " Chunks left: " << m_neededChunks.size()
-                              << " Requested chunks: " << m_requestedChunks.size();
+            LOG(m_logger) << "Saved chunk " << hash << " Chunks left: " << m_neededChunks.size()
+                          << " Requested chunks: " << m_requestedChunks.size();
             if (m_neededChunks.empty() && m_requestedChunks.empty())
-                clog(SnapshotLog) << "Snapshot download complete!";
+                LOG(m_logger) << "Snapshot download complete!";
         }
         else
             m_neededChunks.push_back(askedHash);
@@ -263,9 +256,9 @@ private:
         u256 const blockNumber = manifest[4].toInt<u256>();
         h256 const blockHash = manifest[5].toHash<h256>();
 
-        clog(SnapshotLog) << "MANIFEST: "
-                          << "version " << version << "state root " << stateRoot << "block number "
-                          << blockNumber << "block hash " << blockHash;
+        LOG(m_logger) << "MANIFEST: "
+                      << "version " << version << " state root " << stateRoot << " block number "
+                      << blockNumber << " block hash " << blockHash;
 
         // TODO handle writeFile failure
         writeFile((boost::filesystem::path(m_snapshotDir) / "MANIFEST").string(), manifest.data());
@@ -281,7 +274,7 @@ private:
             while (!peer)
                 peer = m_freePeers.value_pop().lock();
 
-            clog(SnapshotLog) << "Requesting chunk " << chunkHash;
+            LOG(m_logger) << "Requesting chunk " << chunkHash;
             peer->requestData(chunkHash);
 
             m_requestedChunks[peer] = chunkHash;
@@ -309,21 +302,25 @@ private:
         m_requestedChunks;
 
     std::unique_ptr<boost::fibers::fiber> m_downloadFiber;
+
+    Logger m_logger{createLogger(VerbosityInfo, "snap")};
 };
 
 }  // namespace
 
 
-WarpHostCapability::WarpHostCapability(BlockChain const& _blockChain, u256 const& _networkId,
-    boost::filesystem::path const& _snapshotDownloadPath,
+WarpHostCapability::WarpHostCapability(p2p::Host const& _host, BlockChain const& _blockChain,
+    u256 const& _networkId, boost::filesystem::path const& _snapshotDownloadPath,
     std::shared_ptr<SnapshotStorageFace> _snapshotStorage)
-  : m_blockChain(_blockChain),
+  : p2p::HostCapability<WarpPeerCapability>(_host),
+    m_blockChain(_blockChain),
     m_networkId(_networkId),
     m_snapshot(_snapshotStorage),
-    m_peerObserver(std::make_shared<WarpPeerObserver>(*this, m_blockChain, _snapshotDownloadPath)),
+    // observer needed only in case we download snapshot
+    m_peerObserver(
+        _snapshotDownloadPath.empty() ? nullptr : createPeerObserver(_snapshotDownloadPath)),
     m_lastTick(0)
 {
-    (void)SnapshotLog::debug; // override "unused variable" error on macOS
 }
 
 WarpHostCapability::~WarpHostCapability()
@@ -331,7 +328,13 @@ WarpHostCapability::~WarpHostCapability()
     terminate();
 }
 
-std::shared_ptr<p2p::Capability> WarpHostCapability::newPeerCapability(
+std::shared_ptr<WarpPeerObserverFace> WarpHostCapability::createPeerObserver(
+    boost::filesystem::path const& _snapshotDownloadPath) const
+{
+    return std::make_shared<WarpPeerObserver>(*this, m_blockChain, _snapshotDownloadPath);
+}
+
+std::shared_ptr<p2p::PeerCapabilityFace> WarpHostCapability::newPeerCapability(
     std::shared_ptr<p2p::SessionFace> const& _s, unsigned _idOffset, p2p::CapDesc const& _cap)
 {
     auto ret = HostCapability<WarpPeerCapability>::newPeerCapability(_s, _idOffset, _cap);

@@ -4,21 +4,35 @@
 #include "EVMC.h"
 
 #include <libdevcore/Log.h>
-#include <libevm/VM.h>
 #include <libevm/VMFactory.h>
 
 namespace dev
 {
 namespace eth
 {
-EVM::EVM(evm_instance* _instance) noexcept : m_instance(_instance)
+EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
 {
     assert(m_instance != nullptr);
-    assert(m_instance->abi_version == EVM_ABI_VERSION);
+    assert(evmc_is_abi_compatible(m_instance));
 
     // Set the options.
     for (auto& pair : evmcOptions())
-        m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
+        if (evmc_set_option(m_instance, pair.first.c_str(), pair.second.c_str()) != 1)
+            cwarn << "Failed to set EVMC parameter '" << pair.first << "'";
+}
+
+/// Handy wrapper for evmc_execute().
+EVM::Result EVM::execute(ExtVMFace& _ext, int64_t gas)
+{
+    auto mode = toRevision(_ext.evmSchedule());
+    evmc_call_kind kind = _ext.isCreate ? EVMC_CREATE : EVMC_CALL;
+    uint32_t flags = _ext.staticCall ? EVMC_STATIC : 0;
+    assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
+    evmc_message msg = {kind, flags, static_cast<int32_t>(_ext.depth), gas, toEvmC(_ext.myAddress),
+        toEvmC(_ext.caller), _ext.data.data(), _ext.data.size(), toEvmC(_ext.value),
+        toEvmC(0x0_cppui256)};
+    return EVM::Result{
+        evmc_execute(m_instance, &_ext, mode, &msg, _ext.code.data(), _ext.code.size())};
 }
 
 owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp)
@@ -33,46 +47,74 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
     (void)int64max;
     assert(io_gas <= int64max);
     assert(_ext.envInfo().gasLimit() <= int64max);
-    assert(_ext.depth <= std::numeric_limits<int32_t>::max());
+    assert(_ext.depth <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
 
     auto gas = static_cast<int64_t>(io_gas);
     EVM::Result r = execute(_ext, gas);
 
-    if (r.status() == EVM_REJECTED)
+    switch (r.status())
     {
-        cwarn << "Execution rejected by EVM-C, executing with interpreter";
-        return VMFactory::create(VMKind::Interpreter)->exec(io_gas, _ext, _onOp);
-    }
+    case EVMC_SUCCESS:
+        io_gas = r.gasLeft();
+        // FIXME: Copy the output for now, but copyless version possible.
+        return {r.output().toVector(), 0, r.output().size()};
 
-    // TODO: Add EVM-C result codes mapping with exception types.
-    if (r.status() == EVM_FAILURE)
+    case EVMC_REVERT:
+        io_gas = r.gasLeft();
+        // FIXME: Copy the output for now, but copyless version possible.
+        throw RevertInstruction{{r.output().toVector(), 0, r.output().size()}};
+
+    case EVMC_OUT_OF_GAS:
+    case EVMC_FAILURE:
         BOOST_THROW_EXCEPTION(OutOfGas());
 
-    io_gas = r.gasLeft();
+    case EVMC_INVALID_INSTRUCTION: // NOTE: this could have its own exception
+    case EVMC_UNDEFINED_INSTRUCTION:
+        BOOST_THROW_EXCEPTION(BadInstruction());
 
-    // FIXME: Copy the output for now, but copyless version possible.
-    owning_bytes_ref output{r.output().toVector(), 0, r.output().size()};
+    case EVMC_BAD_JUMP_DESTINATION:
+        BOOST_THROW_EXCEPTION(BadJumpDestination());
 
-    if (r.status() == EVM_REVERT)
-        throw RevertInstruction(std::move(output));
+    case EVMC_STACK_OVERFLOW:
+        BOOST_THROW_EXCEPTION(OutOfStack());
 
-    return output;
+    case EVMC_STACK_UNDERFLOW:
+        BOOST_THROW_EXCEPTION(StackUnderflow());
+
+    case EVMC_INVALID_MEMORY_ACCESS:
+        BOOST_THROW_EXCEPTION(BufferOverrun());
+
+    case EVMC_STATIC_MODE_VIOLATION:
+        BOOST_THROW_EXCEPTION(DisallowedStateChange());
+
+    case EVMC_REJECTED:
+        cwarn << "Execution rejected by EVMC, executing with default VM implementation";
+        return VMFactory::create(VMKind::Legacy)->exec(io_gas, _ext, _onOp);
+
+    case EVMC_INTERNAL_ERROR:
+    default:
+        if (r.status() <= EVMC_INTERNAL_ERROR)
+            BOOST_THROW_EXCEPTION(InternalVMError{} << errinfo_evmcStatusCode(r.status()));
+        else
+            // These cases aren't really internal errors, just more specific
+            // error codes returned by the VM. Map all of them to OOG.
+            BOOST_THROW_EXCEPTION(OutOfGas());
+    }
 }
 
-evm_revision toRevision(EVMSchedule const& _schedule)
+evmc_revision EVM::toRevision(EVMSchedule const& _schedule)
 {
-	if (_schedule.haveCreate2)
-		return EVM_CONSTANTINOPLE;
-	if (_schedule.haveRevert)
-		return EVM_BYZANTIUM;
-	if (_schedule.eip158Mode)
-		return EVM_SPURIOUS_DRAGON;
-	if (_schedule.eip150Mode)
-		return EVM_TANGERINE_WHISTLE;
-	if (_schedule.haveDelegateCall)
-		return EVM_HOMESTEAD;
-	return EVM_FRONTIER;
+    if (_schedule.haveCreate2)
+        return EVMC_CONSTANTINOPLE;
+    if (_schedule.haveRevert)
+        return EVMC_BYZANTIUM;
+    if (_schedule.eip158Mode)
+        return EVMC_SPURIOUS_DRAGON;
+    if (_schedule.eip150Mode)
+        return EVMC_TANGERINE_WHISTLE;
+    if (_schedule.haveDelegateCall)
+        return EVMC_HOMESTEAD;
+    return EVMC_FRONTIER;
 }
-
-}
-}
+}  // namespace eth
+}  // namespace dev

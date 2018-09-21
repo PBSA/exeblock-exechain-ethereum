@@ -1,96 +1,55 @@
-#------------------------------------------------------------------------------
-# Top-level CMake file for cpp-ethereum.
-#
-# The documentation for cpp-ethereum is hosted at http://cpp-ethereum.org
-#
-# ------------------------------------------------------------------------------
-# This file is part of cpp-ethereum.
-#
-# cpp-ethereum is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# cpp-ethereum is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>
-#
-# (c) 2014-2016 cpp-ethereum contributors.
-#------------------------------------------------------------------------------
+# Aleth: Ethereum C++ client, tools and libraries.
+# Copyright 2018 Aleth Autors.
+# Licensed under the GNU General Public License, Version 3. See the LICENSE file.
 
 cmake_minimum_required(VERSION 3.5.1)
 
-if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    # The default toolchain file configures compilers and build environment.
-    # This configuration is also used by hunter to build dependencies.
-    # CMake will cache this value, not need to explictly specify CACHE param.
-    set(CMAKE_TOOLCHAIN_FILE ${CMAKE_SOURCE_DIR}/cmake/toolchain.cmake)
+if (NOT EXISTS ${CMAKE_SOURCE_DIR}/evmc/.git OR NOT EXISTS ${CMAKE_SOURCE_DIR}/cmake/cable/.git)
+    message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
 endif()
+
+include(cmake/cable/bootstrap.cmake)
+include(CableBuildInfo)
+include(CableBuildType)
+include(CableToolchains)
+include(GNUInstallDirs)
+
+cable_configure_toolchain(DEFAULT cxx11-pic)
 
 set(ETH_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${ETH_CMAKE_DIR})
-
-set(CPP_ETHEREUM_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE PATH "Path to the root directory for cpp-ethereum")
-
-# set cmake_policies
-include(EthPolicy)
-eth_policy()
-
-if(CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo" CACHE STRING "" FORCE)
-endif()
 
 # Map current configuration to configurations of imported targets.
 set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
 
-set(HUNTER_CONFIGURATION_TYPES Release)
-set(HUNTER_JOBS_NUMBER 4)
-set(HUNTER_CACHE_SERVERS "https://github.com/ethereum/hunter-cache")
+set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Hunter configuration types")
+set(HUNTER_JOBS_NUMBER 4 CACHE STRING "Hunter jobs number")
+set(HUNTER_CACHE_SERVERS "https://github.com/ethereum/hunter-cache" CACHE STRING "Hunter cache servers")
+set(HUNTER_PASSWORDS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Hunter/passwords.cmake CACHE STRING "Hunter password path")
+
+# In CI builds upload the binaries if the GITHUB_USER_PASSWORD was decrypted
+# (only for branches and internal PRs).
+if("$ENV{CI}" AND NOT "$ENV{GITHUB_USER_PASSWORD}" STREQUAL "")
+    set(run_upload YES)
+else()
+    set(run_upload NO)
+endif()
+option(HUNTER_RUN_UPLOAD "Upload binaries to the cache server" ${run_upload})
+
 include(HunterGate)
 HunterGate(
-    URL "https://github.com/ruslo/hunter/archive/v0.19.232.tar.gz"
-    SHA1 "a412c45fe4c5a72fed386f62dd8d753bd4fd3d11"
+    URL "https://github.com/ruslo/hunter/archive/v0.21.16.tar.gz"
+    SHA1 "aa1faccd24f33dd2c368f85a4e9ca2e5d9c249cb"
     LOCAL
 )
 
-if(HUNTER_ENABLED)
-    # Find Python executable,
-    # prefer version 3 that has requests module included.
-    set(Python_ADDITIONAL_VERSIONS 3)
-    find_package(PythonInterp)
-    if(PYTHONINTERP_FOUND)
-        hunter_gate_self(
-            "${HUNTER_CACHED_ROOT}"
-            "${HUNTER_VERSION}"
-            "${HUNTER_SHA1}"
-            hunter_dir
-        )
-        set(hunter_upload_script "${hunter_dir}/maintenance/upload-cache-to-github.py")
-        set(hunter_cache_dir "${HUNTER_GATE_ROOT}/_Base/Cache")
-        set(hunter_tmp_dir "${HUNTER_GATE_ROOT}/tmp")
-        add_custom_target(
-            hunter_upload_cache
-            ${PYTHON_EXECUTABLE} ${hunter_upload_script}
-            --username hunter-cache-bot
-            --repo-owner ethereum
-            --repo hunter-cache
-            --cache-dir ${hunter_cache_dir}
-            --temp-dir ${hunter_tmp_dir}
-        )
-    endif()
-endif()
+project(aleth)
+set(PROJECT_VERSION 1.5.0.dev2)
 
-# project name and version should be set after cmake_policy CMP0048
-project(cpp-ethereum VERSION "1.3.0")
+cable_set_build_type(DEFAULT RelWithDebInfo CONFIGURATION_TYPES Debug;Release;RelWithDebInfo)
 
-if (NOT EXISTS ${CMAKE_SOURCE_DIR}/evmjit/.git)
-    message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
-endif()
+cable_add_buildinfo_library(PROJECT_NAME aleth)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
 
@@ -103,8 +62,8 @@ include(EthUtils)
 
 set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_MULTITHREADED ON)
-hunter_add_package(Boost COMPONENTS program_options filesystem system thread context fiber)
-find_package(Boost CONFIG REQUIRED program_options filesystem system thread context fiber)
+hunter_add_package(Boost COMPONENTS program_options filesystem system thread context fiber log)
+find_package(Boost CONFIG REQUIRED program_options filesystem system thread context fiber log)
 
 hunter_add_package(jsoncpp)
 find_package(jsoncpp CONFIG REQUIRED)
@@ -118,11 +77,14 @@ find_package(cryptopp CONFIG REQUIRED)
 hunter_add_package(libjson-rpc-cpp)
 find_package(libjson-rpc-cpp CONFIG REQUIRED)
 
+hunter_add_package(libscrypt)
+find_package(libscrypt CONFIG REQUIRED)
+
+hunter_add_package(ethash)
+find_package(ethash CONFIG REQUIRED)
+
 include(ProjectSecp256k1)
 include(ProjectLibFF)
-
-# Import binaryen library before hera to make it available also to testeth.
-include(hera/cmake/ProjectBinaryen.cmake)
 
 find_package(Threads)
 
@@ -134,18 +96,23 @@ set(UTILS_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/utils")
 
 configure_project()
 
-if (HERA)
-    add_subdirectory(hera)
+if(TESTS)
+    # Import binaryen library from hera for testeth.
+    # TODO: remove this and the submodule once testeth uses binaryen as a CLI tool.
+    include(hera/cmake/ProjectBinaryen.cmake)
 endif()
+
+add_subdirectory(evmc)
 
 #Global include path for all libs.
 include_directories("${CMAKE_SOURCE_DIR}")
 
+option(ALETH_INTERPRETER_SHARED "Build aleth-interpreter as a shared library" OFF)
+add_subdirectory(libaleth-interpreter)
+
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libp2p)
-
-add_subdirectory(libethash)
 
 add_subdirectory(libethcore)
 add_subdirectory(libevm)
@@ -155,15 +122,11 @@ add_subdirectory(libethashseal)
 add_subdirectory(libwebthree)
 add_subdirectory(libweb3jsonrpc)
 
-if (EVMJIT)
-    add_subdirectory(evmjit)
-endif()
-
-add_subdirectory(eth)
+add_subdirectory(aleth)
 
 if (TOOLS)
-    add_subdirectory(ethkey)
-    add_subdirectory(ethvm)
+    add_subdirectory(aleth-key)
+    add_subdirectory(aleth-vm)
     add_subdirectory(rlp)
 endif()
 
@@ -172,5 +135,16 @@ if (TESTS)
     add_subdirectory(test)
 endif()
 
-# TODO: Split out json_spirit, libscrypt and sec256k1.
-add_subdirectory(utils)
+
+install(FILES ${PROJECT_BINARY_DIR}/aleth/buildinfo.json DESTINATION ${CMAKE_INSTALL_DATADIR}/aleth)
+
+
+if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+else()
+    set(CPACK_GENERATOR TGZ)
+endif()
+set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME})
+set(CPACK_PACKAGE_CHECKSUM SHA256)
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY FALSE)
+include(CPack)
