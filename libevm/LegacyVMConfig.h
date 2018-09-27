@@ -349,11 +349,11 @@ namespace dev
         &&RETURNSUB,                            \
         &&PUTLOCAL,                             \
         &&GETLOCAL,                             \
-        &&INVALID,                              \
-        &&INVALID,                              \
-        &&INVALID,                              \
-        &&INVALID,                              \
-        &&INVALID,                              \
+        &&IDASSET,  /* EXEBLOCK */              \
+        &&PROPERTY,                             \
+        &&CONVERT,                              \
+        &&ASSETBALANCE,                         \
+        &&CALLASSET,  /* EXEBLOCK */            \
         &&INVALID,                              \
         &&INVALID, /* C0, */                    \
         &&XADD,                                 \

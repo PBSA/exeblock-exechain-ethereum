@@ -284,6 +284,7 @@ void LegacyVM::interpretCases()
         CASE(STATICCALL)
         CASE(CALL)
         CASE(CALLCODE)
+        CASE(CALLASSET)
         {
             ON_OP();
             if (m_OP == Instruction::DELEGATECALL && !m_schedule->haveDelegateCall)
@@ -1441,6 +1442,86 @@ void LegacyVM::interpretCases()
             m_SPP[0] = m_ext->envInfo().gasLimit();
         }
         NEXT
+
+        /////////////////////////////////////////////////// // TODO temp
+        CASE(IDASSET)
+        {
+            ON_OP();
+            updateIOGas();
+
+            m_SPP[0] = m_ext->getCallIdAsset();
+        }
+        NEXT
+
+        CASE(PROPERTY)
+        {
+            // m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+            updateMem(memNeed(m_SP[0], m_SP[1]));
+            ON_OP();
+            updateIOGas();
+
+            uint64_t slotSize = 32;
+            uint64_t inOff = (uint64_t)m_SP[0];
+            uint64_t inSize = (uint64_t)m_SP[1];
+
+            if(!m_ext->getObjectProperty(bytesConstRef(m_mem.data() + inOff, inSize).toString(), callMethodResult)){
+                throwBadInstruction();
+            }
+
+            u256 offset = u256(h256(bytes(m_mem.begin() + 64, m_mem.begin() + 64 + slotSize)));
+            m_mem.erase(m_mem.begin() + uint64_t(offset), m_mem.end());
+
+            size_t dataSize = callMethodResult.size();
+            size_t count = callMethodResult.size() < slotSize ? slotSize - callMethodResult.size() : slotSize - (callMethodResult.size() % slotSize);
+            callMethodResult.insert(callMethodResult.end(), count, 0x00);
+
+            h256 newOffsetTemp(u256(uint64_t(offset) + uint64_t(32) + uint64_t(callMethodResult.size())));
+            std::memcpy(m_mem.data() + 64, newOffsetTemp.asBytes().data(), newOffsetTemp.asBytes().size());
+
+            updateMem(memNeed(offset, u256(slotSize + callMethodResult.size())));
+
+            h256 sizeTemp = h256(u256(dataSize));
+            std::memcpy(m_mem.data() + uint64_t(offset), sizeTemp.asBytes().data(), sizeTemp.asBytes().size());
+            std::memcpy(m_mem.data() + uint64_t(offset + slotSize), callMethodResult.data(), callMethodResult.size());
+            callMethodResult.clear();
+
+            m_SPP[0] = offset;
+        }
+        NEXT
+
+        CASE(CONVERT)
+        {
+            // m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+            updateMem(memNeed(m_SP[0], m_SP[1]));
+            ON_OP();
+            updateIOGas();
+
+            uint64_t inOff = (uint64_t)m_SP[0];
+            uint64_t inSize = (uint64_t)m_SP[1];
+
+            if(bytesConstRef(m_mem.data() + inOff, inSize).size() > 32){
+                throwBadInstruction();
+            }
+
+            m_SPP[0] = u256(h256(bytesConstRef(m_mem.data() + inOff, inSize)));
+        }
+        NEXT
+
+        CASE(ASSETBALANCE)
+        {
+            // m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+            updateMem(memNeed(m_SP[0], m_SP[1]));
+            ON_OP();
+            updateIOGas();
+
+            uint64_t inOff = (uint64_t)m_SP[0];
+            uint64_t inSize = (uint64_t)m_SP[1];
+            Address addr(asAddress(m_SP[2]));
+
+            m_SPP[0] = m_ext->balance(addr, bytesConstRef(m_mem.data() + inOff, inSize).toString());
+        }
+        NEXT
+///////////////////////////////////////////////////
 
         CASE(POP)
         {

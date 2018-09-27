@@ -143,7 +143,7 @@ enum class Instruction : uint8_t
     DUP13,        ///< copies the 13th highest item in the stack to the top of the stack
     DUP14,        ///< copies the 14th highest item in the stack to the top of the stack
     DUP15,        ///< copies the 15th highest item in the stack to the top of the stack
-    DUP16,        ///< copies the 16th highest item in the stack to the top of the stack	
+    DUP16,        ///< copies the 16th highest item in the stack to the top of the stack
 
     SWAP1 = 0x90,  ///< swaps the highest and second highest value on the stack
     SWAP2,         ///< swaps the highest and third highest value on the stack
