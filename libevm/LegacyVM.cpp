@@ -291,6 +291,8 @@ void LegacyVM::interpretCases()
                 throwBadInstruction();
             if (m_OP == Instruction::STATICCALL && !m_schedule->haveStaticCall)
                 throwBadInstruction();
+            if (m_OP == Instruction::CALLASSET && !m_schedule->exeBlockMode)
+                throwBadInstruction();
             if (m_OP == Instruction::CALL && m_ext->staticCall && m_SP[2] != 0)
                 throwDisallowedStateChange();
             m_bounce = &LegacyVM::caseCall;
@@ -1446,6 +1448,8 @@ void LegacyVM::interpretCases()
         /////////////////////////////////////////////////// // TODO temp
         CASE(IDASSET)
         {
+            if (!m_schedule->exeBlockMode)
+                throwBadInstruction();
             ON_OP();
             updateIOGas();
 
@@ -1456,6 +1460,8 @@ void LegacyVM::interpretCases()
         CASE(PROPERTY)
         {
             // m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+            if (!m_schedule->exeBlockMode)
+                throwBadInstruction();
             updateMem(memNeed(m_SP[0], m_SP[1]));
             ON_OP();
             updateIOGas();
@@ -1492,6 +1498,8 @@ void LegacyVM::interpretCases()
         CASE(CONVERT)
         {
             // m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+            if (!m_schedule->exeBlockMode)
+                throwBadInstruction();
             updateMem(memNeed(m_SP[0], m_SP[1]));
             ON_OP();
             updateIOGas();
@@ -1510,6 +1518,8 @@ void LegacyVM::interpretCases()
         CASE(ASSETBALANCE)
         {
             // m_runGas = toUint64(m_schedule->sha3Gas + (u512(*(m_sp - 1)) + 31) / 32 * m_schedule->sha3WordGas);
+            if (!m_schedule->exeBlockMode)
+                throwBadInstruction();
             updateMem(memNeed(m_SP[0], m_SP[1]));
             ON_OP();
             updateIOGas();
