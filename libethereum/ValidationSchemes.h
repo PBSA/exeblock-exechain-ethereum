@@ -55,6 +55,7 @@ extern std::string const c_daoHardforkBlock;
 extern std::string const c_EIP150ForkBlock;
 extern std::string const c_EIP158ForkBlock;
 extern std::string const c_byzantiumForkBlock;
+extern std::string const c_ExeBlockForkBlock;
 extern std::string const c_eWASMForkBlock;
 extern std::string const c_constantinopleForkBlock;
 extern std::string const c_experimentalForkBlock;

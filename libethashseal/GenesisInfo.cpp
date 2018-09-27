@@ -22,6 +22,7 @@ using namespace dev;
 //Client configurations
 #include "genesis/mainNetwork.cpp"
 #include "genesis/ropsten.cpp"
+#include "genesis/ExeBlockNetwork.cpp"
 
 //Test configurations
 #include "genesis/test/byzantiumNoProofTest.cpp"
@@ -53,6 +54,7 @@ std::string const& dev::eth::genesisInfo(Network _n)
     {
     //Client genesis
     case Network::MainNetwork: return c_genesisInfoMainNetwork;
+    case Network::ExeBlockNetwork: return c_genesisInfoExeBlockNetwork;
     case Network::Ropsten: return c_genesisInfoRopsten;
 
     //Test genesis
@@ -91,6 +93,7 @@ h256 const& dev::eth::genesisStateRoot(Network _n)
     switch (_n)
     {
     case Network::MainNetwork: return c_genesisStateRootMainNetwork;
+    case Network::ExeBlockNetwork:
     case Network::Ropsten:
     case Network::MainNetworkTest:
     case Network::TransitionnetTest:
