@@ -355,29 +355,25 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 }
 bool Executive::create(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
 {
-	_callIdAsset = 0;
 	// Contract creation by an external account is the same as CREATE opcode
-    return createOpcode(_txSender, _endowment, _gasPrice, _gas, _init, _origin);
+    return createOpcode(_txSender, _endowment, _gasPrice, _gas, _init, _origin, _callIdAsset);
 }
 
 bool Executive::createOpcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
 {
-	_callIdAsset = 0;
 	u256 nonce = m_s.getNonce(_sender);
 	m_newAddress = right160(sha3(rlpList(_sender, nonce)));
-	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
+	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin, _callIdAsset);
 }
 
 bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 const& _salt, u256 _callIdAsset)
 {
-	_callIdAsset = 0;
 	m_newAddress = right160(sha3(_sender.asBytes() + toBigEndian(_salt) + sha3(_init).asBytes()));
-	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
+	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin, _callIdAsset);
 }
 
 bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
 {
-    _callIdAsset = 0;
     if (_sender != MaxAddress ||
         m_envInfo.number() < m_sealEngine.chainParams().experimentalForkBlock)  // EIP86
         m_s.incNonce(_sender);
@@ -415,7 +411,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // Schedule _init execution if not empty.
     if (!_init.empty())
         m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_sealEngine, m_newAddress, _sender, _origin,
-            _endowment, _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false);
+            _endowment, _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false, _callIdAsset);
 
     return !m_ext;
 }

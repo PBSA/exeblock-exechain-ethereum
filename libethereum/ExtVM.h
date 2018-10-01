@@ -42,7 +42,7 @@ public:
     ExtVM(State& _s, EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Address _myAddress,
         Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data,
         bytesConstRef _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-        bool _staticCall)
+        bool _staticCall, u256 _callIdAsset = u256(0))
       : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(),
             _codeHash, _depth, _isCreate, _staticCall),
         m_s(_s),
@@ -52,6 +52,7 @@ public:
         // is created only if an account has code (so exist). In case of CREATE
         // the account must be created first.
         assert(m_s.addressInUse(_myAddress));
+		callIdAsset = _callIdAsset;
     }
 
     /// Read storage location.
@@ -108,11 +109,12 @@ public:
 
 	virtual u256 balance(Address const&, const std::string&) override { return 0; };
 
-	virtual u256 getCallIdAsset() override { return 0; };
+	virtual u256 getCallIdAsset() override { return callIdAsset; };
 
 private:
     State& m_s;  ///< A reference to the base state.
     SealEngineFace const& m_sealEngine;
+	u256 callIdAsset;
 };
 
 }
