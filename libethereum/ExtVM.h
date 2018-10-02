@@ -76,10 +76,10 @@ public:
     h256 codeHashAt(Address _a) final;
 
     /// Create a new contract.
-    virtual CreateResult create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op, u256 _salt, OnOpFunc const& _onOp = {}) override final;
+    virtual CreateResult create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op, u256 _salt, OnOpFunc const& _onOp = {}) override;
 
     /// Create a new message call.
-    virtual CallResult call(CallParameters& _params) override final;
+    virtual CallResult call(CallParameters& _params) override;
 
     /// Read address's balance.
     virtual u256 balance(Address _a) override final { return m_s.balance(_a); }
@@ -110,7 +110,7 @@ public:
 
 	virtual u256 getCallIdAsset() override { return 0; };
 
-private:
+protected:
     State& m_s;  ///< A reference to the base state.
     SealEngineFace const& m_sealEngine;
 };
