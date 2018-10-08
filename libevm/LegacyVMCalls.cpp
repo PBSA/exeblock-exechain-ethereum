@@ -82,7 +82,7 @@ void LegacyVM::throwBadStack(unsigned _removed, unsigned _added)
 
 void LegacyVM::throwRevertInstruction(owning_bytes_ref&& _output)
 {
-    // We can't use BOOST_THROW_EXCEPTION here because it makes a copy of exception inside and RevertInstruction has no copy constructor 
+    // We can't use BOOST_THROW_EXCEPTION here because it makes a copy of exception inside and RevertInstruction has no copy constructor
     throw RevertInstruction(move(_output));
 }
 
@@ -204,7 +204,7 @@ bool LegacyVM::caseCallSetup(CallParameters *callParams, bytesRef& o_output)
 
     callParams->staticCall = (m_OP == Instruction::STATICCALL || m_ext->staticCall);
 
-    bool const haveValueArg = m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE;
+    bool const haveValueArg = m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE  || m_OP == Instruction::CALLASSET;
 
     Address destinationAddr = asAddress(m_SP[1]);
     if (m_OP == Instruction::CALL && !m_ext->exists(destinationAddr))
@@ -261,7 +261,33 @@ bool LegacyVM::caseCallSetup(CallParameters *callParams, bytesRef& o_output)
     uint64_t outOff = (uint64_t)outputOffset;
     uint64_t outSize = (uint64_t)outputSize;
 
-    if (m_ext->balance(m_ext->myAddress) >= callParams->valueTransfer && m_ext->depth < 1024)
+///////////////////////////////////////////////////// // TODO temp
+	callParams->callIdAsset = m_ext->getCallIdAsset();
+	u256 balance = m_ext->balance(m_ext->myAddress);
+	if(m_OP == Instruction::CALLASSET) {
+
+		// u256 callIdAsset = m_SP[11];
+		// m_SP[11] = m_SP[12];
+		// m_SP[12] = m_SP[13];
+		// m_SP[13] = m_SP[14];
+		// m_SP[14] = m_SP[15];
+		// m_SP[15] = m_SP[16];
+		// m_SP[15] = callIdAsset;
+		// m_SP[16] = callIdAsset;
+
+		// --m_SP;
+
+		callParams->transferIdAsset = m_SP[11];
+		callParams->trIdAsset = true;
+
+		std::string idAsset = "1.3." + std::to_string(uint64_t(callParams->transferIdAsset));
+
+		balance = m_ext->balance(m_ext->myAddress, idAsset);
+	}
+/////////////////////////////////////////////////////
+
+//    if (m_ext->balance(m_ext->myAddress) >= callParams->valueTransfer && m_ext->depth < 1024)
+	if (balance >= callParams->valueTransfer && m_ext->depth < 1024) // TODO temp
     {
         callParams->onOp = m_onOp;
         callParams->senderAddress = m_OP == Instruction::DELEGATECALL ? m_ext->caller : m_ext->myAddress;
