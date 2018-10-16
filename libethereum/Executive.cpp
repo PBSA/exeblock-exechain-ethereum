@@ -350,7 +350,10 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     // Transfer ether.
-    m_s.transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+	if (m_envInfo.number() >= m_sealEngine.chainParams().ExeBlockForkBlock)
+		m_s.transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer, _p.trIdAsset ? _p.transferIdAsset : _p.callIdAsset );
+    else
+		m_s.transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
     return !m_ext;
 }
 bool Executive::create(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 _callIdAsset)
@@ -363,12 +366,16 @@ bool Executive::createOpcode(Address const& _sender, u256 const& _endowment, u25
 {
 	u256 nonce = m_s.getNonce(_sender);
 	m_newAddress = right160(sha3(rlpList(_sender, nonce)));
+	if (m_envInfo.number() >= m_sealEngine.chainParams().ExeBlockForkBlock)
+		m_newAddress = m_s.getNewAddress();
 	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin, _callIdAsset);
 }
 
 bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice, u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 const& _salt, u256 _callIdAsset)
 {
 	m_newAddress = right160(sha3(bytes{0xff} + _sender.asBytes() + toBigEndian(_salt) + sha3(_init).asBytes()));
+	if (m_envInfo.number() >= m_sealEngine.chainParams().ExeBlockForkBlock)
+		m_newAddress = m_s.getNewAddress();
 	return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin, _callIdAsset);
 }
 
