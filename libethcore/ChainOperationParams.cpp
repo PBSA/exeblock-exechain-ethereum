@@ -55,10 +55,10 @@ ChainOperationParams::ChainOperationParams():
 
 EVMSchedule const& ChainOperationParams::scheduleForBlockNumber(u256 const& _blockNumber) const
 {
-    if (_blockNumber >= experimentalForkBlock)
-        return ExperimentalSchedule;
-    else if (_blockNumber >= ExeBlockForkBlock)
+    if (_blockNumber >= ExeBlockForkBlock)
         return ExeBlockSchedule;
+    else if (_blockNumber >= experimentalForkBlock)
+        return ExperimentalSchedule;
     else if (_blockNumber >= constantinopleForkBlock)
         return ConstantinopleSchedule;
     else if (_blockNumber >= eWASMForkBlock)
