@@ -1,4 +1,4 @@
-include(ProjectMPIR)
+include("${CMAKE_CURRENT_LIST_DIR}/ProjectMPIR.cmake")
 
 set(prefix "${CMAKE_BINARY_DIR}/deps")
 set(libff_library "${prefix}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}ff${CMAKE_STATIC_LIBRARY_SUFFIX}")

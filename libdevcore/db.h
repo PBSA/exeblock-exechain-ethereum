@@ -70,34 +70,21 @@ public:
     virtual void forEach(std::function<bool(Slice, Slice)> f) const = 0;
 };
 
-struct FailedToOpenDB : virtual Exception
+DEV_SIMPLE_EXCEPTION(DatabaseError);
+
+enum class DatabaseStatus
 {
-    using Exception::Exception;
+    Ok,
+    NotFound,
+    Corruption,
+    NotSupported,
+    InvalidArgument,
+    IOError,
+    Unknown
 };
-struct FailedInsertInDB : virtual Exception
-{
-    using Exception::Exception;
-};
-struct FailedLookupInDB : virtual Exception
-{
-    using Exception::Exception;
-};
-struct FailedDeleteInDB : virtual Exception
-{
-    using Exception::Exception;
-};
-struct FailedCommitInDB : virtual Exception
-{
-    using Exception::Exception;
-};
-struct FailedRollbackInDB : virtual Exception
-{
-    using Exception::Exception;
-};
-struct FailedIterateDB : virtual Exception
-{
-    using Exception::Exception;
-};
+
+using errinfo_dbStatusCode = boost::error_info<struct tag_dbStatusCode, DatabaseStatus>;
+using errinfo_dbStatusString = boost::error_info<struct tag_dbStatusString, std::string>;
 
 }  // namespace db
 }  // namespace dev

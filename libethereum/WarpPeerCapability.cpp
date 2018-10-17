@@ -26,9 +26,10 @@ namespace dev
 {
 namespace eth
 {
-WarpPeerCapability::WarpPeerCapability(std::shared_ptr<p2p::SessionFace> _s,
-    p2p::HostCapabilityFace* _h, unsigned _i, p2p::CapDesc const& /* _cap */)
-  : Capability(_s, _h, _i)
+WarpPeerCapability::WarpPeerCapability(std::weak_ptr<p2p::SessionFace> _s,
+    std::string const& _name, unsigned _messageCount, unsigned _offset,
+    p2p::CapDesc const& /* _cap */)
+  : PeerCapability(std::move(_s), _name, _messageCount, _offset)
 {}
 
 void WarpPeerCapability::init(unsigned _hostProtocolVersion, u256 _hostNetworkId,
@@ -56,9 +57,10 @@ void WarpPeerCapability::init(unsigned _hostProtocolVersion, u256 _hostNetworkId
         _chainGenesisHash, snapshotBlockHash, snapshotBlockNumber);
 }
 
-bool WarpPeerCapability::interpret(unsigned _id, RLP const& _r)
+bool WarpPeerCapability::interpretCapabilityPacket(unsigned _id, RLP const& _r)
 {
     std::shared_ptr<WarpPeerObserverFace> observer(m_observer.lock());
+    // TODO: we still want to answer some messages when we only give out imported snapshot
     if (!observer)
         return false;
 
@@ -84,12 +86,11 @@ bool WarpPeerCapability::interpret(unsigned _id, RLP const& _r)
             m_snapshotHash = _r[5].toHash<h256>();
             m_snapshotNumber = _r[6].toInt<u256>();
 
-            clog(p2p::NetMessageSummary)
-                << "Status: "
-                << "protocol version " << m_protocolVersion << "networkId " << m_networkId
-                << "genesis hash " << m_genesisHash << "total difficulty " << m_totalDifficulty
-                << "latest hash" << m_latestHash << "snapshot hash" << m_snapshotHash
-                << "snapshot number" << m_snapshotNumber;
+            cnetlog << "Status: "
+                    << " protocol version " << m_protocolVersion << " networkId " << m_networkId
+                    << " genesis hash " << m_genesisHash << " total difficulty "
+                    << m_totalDifficulty << " latest hash " << m_latestHash << " snapshot hash "
+                    << m_snapshotHash << " snapshot number " << m_snapshotNumber;
             setIdle();
             observer->onPeerStatus(
                 std::dynamic_pointer_cast<WarpPeerCapability>(shared_from_this()));
@@ -152,12 +153,12 @@ bool WarpPeerCapability::interpret(unsigned _id, RLP const& _r)
     }
     catch (Exception const&)
     {
-        clog(p2p::NetWarn) << "Warp Peer causing an Exception:"
-                           << boost::current_exception_diagnostic_information() << _r;
+        cnetlog << "Warp Peer causing an Exception: "
+                << boost::current_exception_diagnostic_information() << " " << _r;
     }
     catch (std::exception const& _e)
     {
-        clog(p2p::NetWarn) << "Warp Peer causing an exception:" << _e.what() << _r;
+        cnetlog << "Warp Peer causing an exception: " << _e.what() << " " << _r;
     }
 
     return true;

@@ -14,20 +14,20 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file WebThree.cpp
- * @author Gav Wood <i@gavwood.com>
- * @date 2014
- */
 
 #include "WebThree.h"
-#include <boost/filesystem.hpp>
-#include <boost/algorithm/string.hpp>
+
 #include <libethereum/Defaults.h>
 #include <libethereum/EthereumHost.h>
 #include <libethereum/ClientTest.h>
 #include <libethashseal/EthashClient.h>
-#include "BuildInfo.h"
 #include <libethashseal/Ethash.h>
+
+#include <aleth/buildinfo.h>
+
+#include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
+
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
@@ -39,30 +39,37 @@ static_assert(BOOST_VERSION >= 106400, "Wrong boost headers version");
 WebThreeDirect::WebThreeDirect(std::string const& _clientVersion,
     boost::filesystem::path const& _dbPath, boost::filesystem::path const& _snapshotPath,
     eth::ChainParams const& _params, WithExisting _we, std::set<std::string> const& _interfaces,
-    NetworkPreferences const& _n, bytesConstRef _network, bool _testing)
+    NetworkConfig const& _n, bytesConstRef _network, bool _testing)
   : m_clientVersion(_clientVersion), m_net(_clientVersion, _n, _network)
 {
     if (_dbPath.size())
         Defaults::setDBPath(_dbPath);
+
     if (_interfaces.count("eth"))
     {
-        Ethash::init();
-        NoProof::init();
-        if (_params.sealEngineName == "Ethash")
-            m_ethereum.reset(new eth::EthashClient(_params, (int)_params.networkID, &m_net, shared_ptr<GasPricer>(), _dbPath, _snapshotPath, _we));
-        else if (_params.sealEngineName == "NoProof" && _testing)
-            m_ethereum.reset(new eth::ClientTest(_params, (int)_params.networkID, &m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+        if (_testing)
+            m_ethereum.reset(new eth::ClientTest(
+                _params, (int)_params.networkID, m_net, shared_ptr<GasPricer>(), _dbPath, _we));
         else
-            m_ethereum.reset(new eth::Client(_params, (int)_params.networkID, &m_net, shared_ptr<GasPricer>(), _dbPath, _snapshotPath, _we));
+        {
+            if (_params.sealEngineName == Ethash::name())
+                m_ethereum.reset(new eth::EthashClient(_params, (int)_params.networkID, m_net,
+                    shared_ptr<GasPricer>(), _dbPath, _snapshotPath, _we));
+            else if (_params.sealEngineName == NoProof::name())
+                m_ethereum.reset(new eth::Client(_params, (int)_params.networkID, m_net,
+                    shared_ptr<GasPricer>(), _dbPath, _snapshotPath, _we));
+            else
+                BOOST_THROW_EXCEPTION(ChainParamsInvalid() << errinfo_comment(
+                                          "Unknown seal engine: " + _params.sealEngineName));
+        }
         m_ethereum->startWorking();
 
-        string bp = DEV_QUOTED(ETH_BUILD_PLATFORM);
-        vector<string> bps;
-        boost::split(bps, bp, boost::is_any_of("/"));
-        bps[0] = bps[0].substr(0, 5);
-        bps[1] = bps[1].substr(0, 3);
-        bps.back() = bps.back().substr(0, 3);
-        m_ethereum->setExtraData(rlpList(0, string(dev::Version) + "++" + string(DEV_QUOTED(ETH_COMMIT_HASH)).substr(0, 4) + (ETH_CLEAN_REPO ? "-" : "*") + string(DEV_QUOTED(ETH_BUILD_TYPE)).substr(0, 1) + boost::join(bps, "/")));
+        const auto* buildinfo = aleth_get_buildinfo();
+        m_ethereum->setExtraData(rlpList(0, string{buildinfo->project_version}.substr(0, 5) + "++" +
+                                                string{buildinfo->git_commit_hash}.substr(0, 4) +
+                                                string{buildinfo->build_type}.substr(0, 1) +
+                                                string{buildinfo->system_name}.substr(0, 5) +
+                                                string{buildinfo->compiler_id}.substr(0, 3)));
     }
 }
 
@@ -79,34 +86,13 @@ WebThreeDirect::~WebThreeDirect()
     // the guarantee is that m_ethereum is only reset *after* all sessions have ended (sessions are allowed to
     // use bits of data owned by m_ethereum).
     m_net.stop();
-    m_ethereum.reset();
 }
 
 std::string WebThreeDirect::composeClientVersion(std::string const& _client)
 {
-    return _client + "/" + \
-        "v" + dev::Version + "/" + \
-        DEV_QUOTED(ETH_BUILD_OS) + "/" + \
-        DEV_QUOTED(ETH_BUILD_COMPILER) + "/" + \
-        DEV_QUOTED(ETH_BUILD_JIT_MODE) + "/" + \
-        DEV_QUOTED(ETH_BUILD_TYPE) + "/" + \
-        string(DEV_QUOTED(ETH_COMMIT_HASH)).substr(0, 8) + \
-        (ETH_CLEAN_REPO ? "" : "*") + "/";
-}
-
-p2p::NetworkPreferences const& WebThreeDirect::networkPreferences() const
-{
-    return m_net.networkPreferences();
-}
-
-void WebThreeDirect::setNetworkPreferences(p2p::NetworkPreferences const& _n, bool _dropPeers)
-{
-    auto had = isNetworkStarted();
-    if (had)
-        stopNetwork();
-    m_net.setNetworkPreferences(_n, _dropPeers);
-    if (had)
-        startNetwork();
+    const auto* buildinfo = aleth_get_buildinfo();
+    return _client + "/" + buildinfo->project_version + "/" + buildinfo->system_name + "/" +
+           buildinfo->compiler_id + buildinfo->compiler_version + "/" + buildinfo->build_type;
 }
 
 std::vector<PeerSessionInfo> WebThreeDirect::peers()

@@ -1,25 +1,27 @@
 /*
-	This file is part of cpp-ethereum.
+    This file is part of cpp-ethereum.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
+    cpp-ethereum is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
+    cpp-ethereum is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    You should have received a copy of the GNU General Public License
+    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "VMFactory.h"
 #include "EVMC.h"
-#include "VM.h"
-#include <evmjit.h>
-#include <hera.h>
+#include "LegacyVM.h"
+
+#include <libaleth-interpreter/interpreter.h>
+
+#include <evmc/loader.h>
 
 namespace po = boost::program_options;
 
@@ -29,7 +31,13 @@ namespace eth
 {
 namespace
 {
-auto g_kind = VMKind::Interpreter;
+auto g_kind = VMKind::Legacy;
+
+/// The pointer to EVMC create function in DLL EVMC VM.
+///
+/// This variable is only written once when processing command line arguments,
+/// so access is thread-safe.
+std::unique_ptr<EVMC> g_evmcDll;
 
 /// A helper type to build the tabled of VM implementations.
 ///
@@ -47,36 +55,56 @@ struct VMKindTableEntry
 /// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
     {VMKind::Interpreter, "interpreter"},
-#if ETH_EVMJIT
-    {VMKind::JIT, "jit"},
-#endif
-#if ETH_HERA
-    {VMKind::Hera, "hera"},
-#endif
+    {VMKind::Legacy, "legacy"},
 };
-}
 
-void validate(boost::any& v, const std::vector<std::string>& values, VMKind* /* target_type */, int)
+void setVMKind(const std::string& _name)
 {
-    // Make sure no previous assignment to 'v' was made.
-    po::validators::check_first_occurrence(v);
-
-    // Extract the first string from 'values'. If there is more than
-    // one string, it's an error, and exception will be thrown.
-    const std::string& s = po::validators::get_single_string(values);
-
     for (auto& entry : vmKindsTable)
     {
         // Try to find a match in the table of VMs.
-        if (s == entry.name)
+        if (_name == entry.name)
         {
-            v = entry.kind;
+            g_kind = entry.kind;
             return;
         }
     }
 
-    throw po::validation_error(po::validation_error::invalid_option_value);
+    // If no match for predefined VM names, try loading it as an EVMC VM DLL.
+    g_kind = VMKind::DLL;
+
+    // Release previous instance
+    g_evmcDll.reset();
+
+    evmc_loader_error_code ec;
+    evmc_instance *instance = evmc_load_and_create(_name.c_str(), &ec);
+    assert(ec == EVMC_LOADER_SUCCESS || instance == nullptr);
+
+    switch (ec)
+    {
+    case EVMC_LOADER_SUCCESS:
+        break;
+    case EVMC_LOADER_CANNOT_OPEN:
+        BOOST_THROW_EXCEPTION(
+            po::validation_error(po::validation_error::invalid_option_value, "vm", _name, 1));
+    case EVMC_LOADER_SYMBOL_NOT_FOUND:
+        BOOST_THROW_EXCEPTION(std::system_error(std::make_error_code(std::errc::invalid_seek),
+            "loading " + _name + " failed: EVMC create function not found"));
+    case EVMC_LOADER_ABI_VERSION_MISMATCH:
+        BOOST_THROW_EXCEPTION(std::system_error(std::make_error_code(std::errc::invalid_argument),
+            "loading " + _name + " failed: EVMC ABI version mismatch"));
+    default:
+        BOOST_THROW_EXCEPTION(
+            std::system_error(std::error_code(static_cast<int>(ec), std::generic_category()),
+                "loading " + _name + " failed"));
+    }
+
+    g_evmcDll.reset(new EVMC{instance});
+
+    cnote << "Loaded EVMC module: " << g_evmcDll->name() << " " << g_evmcDll->version() << " ("
+          << _name << ")";
 }
+}  // namespace
 
 namespace
 {
@@ -84,10 +112,10 @@ namespace
 /// space and we can reuse this variable in exception message.
 const char c_evmcPrefix[] = "evmc ";
 
-/// The list of EVM-C options stored as pairs of (name, value).
+/// The list of EVMC options stored as pairs of (name, value).
 std::vector<std::pair<std::string, std::string>> s_evmcOptions;
 
-/// The additional parser for EVM-C options. The options should look like
+/// The additional parser for EVMC options. The options should look like
 /// `--evmc name=value` or `--evmc=name=value`. The boost pass the strings
 /// of `name=value` here. This function splits the name and value or reports
 /// the syntax error if the `=` character is missing.
@@ -103,7 +131,7 @@ void parseEvmcOptions(const std::vector<std::string>& _opts)
         s_evmcOptions.emplace_back(std::move(name), std::move(value));
     }
 }
-}
+}  // namespace
 
 std::vector<std::pair<std::string, std::string>>& evmcOptions() noexcept
 {
@@ -125,52 +153,49 @@ po::options_description vmProgramOptions(unsigned _lineLength)
         return "Select VM implementation. Available options are: " + names + ".";
     }();
 
-    po::options_description opts("VM Options", _lineLength);
+    po::options_description opts("VM OPTIONS", _lineLength);
     auto add = opts.add_options();
 
     add("vm",
-        po::value<VMKind>()
-            ->value_name("<name>")
-            ->default_value(VMKind::Interpreter, "interpreter")
-            ->notifier(VMFactory::setKind),
+        po::value<std::string>()
+            ->value_name("<name>|<path>")
+            ->default_value("legacy")
+            ->notifier(setVMKind),
         description.data());
 
     add(c_evmcPrefix,
         po::value<std::vector<std::string>>()
+            ->multitoken()
             ->value_name("<option>=<value>")
             ->notifier(parseEvmcOptions),
-        "EVM-C option");
+        "EVMC option\n");
 
     return opts;
 }
 
 
-void VMFactory::setKind(VMKind _kind)
-{
-    g_kind = _kind;
-}
-
-std::unique_ptr<VMFace> VMFactory::create()
+VMPtr VMFactory::create()
 {
     return create(g_kind);
 }
 
-std::unique_ptr<VMFace> VMFactory::create(VMKind _kind)
+VMPtr VMFactory::create(VMKind _kind)
 {
+    static const auto default_delete = [](VMFace * _vm) noexcept { delete _vm; };
+    static const auto null_delete = [](VMFace*) noexcept {};
+
     switch (_kind)
     {
-#ifdef ETH_EVMJIT
-    case VMKind::JIT:
-        return std::unique_ptr<VMFace>(new EVMC{evmjit_create()});
-#endif
-#ifdef ETH_HERA
-    case VMKind::Hera:
-        return std::unique_ptr<VMFace>(new EVMC{hera_create()});
-#endif
     case VMKind::Interpreter:
+        return {new EVMC{evmc_create_interpreter()}, default_delete};
+    case VMKind::DLL:
+        assert(g_evmcDll != nullptr);
+        // Return "fake" owning pointer to global EVMC DLL VM.
+        return {g_evmcDll.get(), null_delete};
+    case VMKind::Legacy:
     default:
-        return std::unique_ptr<VMFace>(new VM);
+        return {new LegacyVM, default_delete};
     }
 }
-}
-}
+}  // namespace eth
+}  // namespace dev
