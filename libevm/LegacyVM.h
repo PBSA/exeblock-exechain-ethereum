@@ -77,11 +77,11 @@ private:
     u256 m_stack[1024];
     u256 *m_stackEnd = &m_stack[1024];
     size_t stackSize() { return m_stackEnd - m_SP; }
-    
+
 #if EIP_615
     // space for return stack
     uint64_t m_return[1024];
-    
+
     // mark PCs with frame size to detect cycles and stack mismatch
     std::vector<size_t> m_frameSize;
 #endif
@@ -102,6 +102,8 @@ private:
     uint64_t m_runGas = 0;
     uint64_t m_newMemSize = 0;
     uint64_t m_copyMemSize = 0;
+
+    bytes callMethodResult; // TODO temp
 
     // initialize interpreter
     void initEntry();
@@ -141,7 +143,7 @@ private:
     void updateMem(uint64_t _newMem);
     void logGasMem();
     void fetchInstruction();
-    
+
     uint64_t decodeJumpDest(const byte* const _code, uint64_t& _pc);
     uint64_t decodeJumpvDest(const byte* const _code, uint64_t& _pc, byte _voff);
 
@@ -153,7 +155,7 @@ private:
         uint64_t w = uint64_t(v);
         return w;
     }
-    
+
     template<class T> uint64_t toInt15(T v)
     {
         // check for overflow
@@ -162,7 +164,7 @@ private:
         uint64_t w = uint64_t(v);
         return w;
     }
-    
+
     //
     // implementations of simd opcodes
     //
@@ -203,7 +205,7 @@ private:
     void xget    (uint8_t, uint8_t);
     void xswizzle(uint8_t);
     void xshuffle(uint8_t);
-    
+
     u256 vtow(uint8_t _b, const u256& _in);
     void wtov(uint8_t _b, u256 _in, u256& _o_out);
 

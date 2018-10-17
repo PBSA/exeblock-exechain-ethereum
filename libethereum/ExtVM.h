@@ -42,7 +42,7 @@ public:
     ExtVM(State& _s, EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Address _myAddress,
         Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data,
         bytesConstRef _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-        bool _staticCall)
+        bool _staticCall, u256 _callIdAsset = u256(0))
       : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(),
             _codeHash, _depth, _isCreate, _staticCall),
         m_s(_s),
@@ -52,13 +52,14 @@ public:
         // is created only if an account has code (so exist). In case of CREATE
         // the account must be created first.
         assert(m_s.addressInUse(_myAddress));
+		callIdAsset = _callIdAsset;
     }
 
     /// Read storage location.
-    virtual u256 store(u256 _n) override final { return m_s.storage(myAddress, _n); }
+    u256 store(u256 _n) override final { return m_s.storage(myAddress, _n); }
 
     /// Write a value in storage.
-    virtual void setStore(u256 _n, u256 _v) override final;
+    void setStore(u256 _n, u256 _v) override final;
 
     /// Read original storage value (before modifications in the current transaction).
     u256 originalStorageValue(u256 const& _key) final
@@ -67,25 +68,25 @@ public:
     }
 
     /// Read address's code.
-    virtual bytes const& codeAt(Address _a) override final { return m_s.code(_a); }
+    bytes const& codeAt(Address _a) override final { return m_s.code(_a); }
 
     /// @returns the size of the code in  bytes at the given address.
-    virtual size_t codeSizeAt(Address _a) override final;
+    size_t codeSizeAt(Address _a) override final;
 
     /// @returns the hash of the code at the given address.
     h256 codeHashAt(Address _a) final;
 
     /// Create a new contract.
-    virtual CreateResult create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op, u256 _salt, OnOpFunc const& _onOp = {}) override;
+    CreateResult create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op, u256 _salt, OnOpFunc const& _onOp = {}) override final;
 
     /// Create a new message call.
-    virtual CallResult call(CallParameters& _params) override;
+    CallResult call(CallParameters& _params) override final;
 
     /// Read address's balance.
-    virtual u256 balance(Address _a) override final { return m_s.balance(_a); }
+    u256 balance(Address _a) override final { return m_s.balance(_a); }
 
     /// Does the account exist?
-    virtual bool exists(Address _a) override final
+    bool exists(Address _a) override final
 	{
 		if (evmSchedule().emptinessIsNonexistence())
 			return m_s.accountNonemptyAndExisting(_a);
@@ -94,25 +95,26 @@ public:
 	}
 
     /// Suicide the associated contract to the given address.
-    virtual void suicide(Address _a) override final;
+    void suicide(Address _a) override final;
 
     /// Return the EVM gas-price schedule for this execution context.
-    virtual EVMSchedule const& evmSchedule() const override final { return m_sealEngine.evmSchedule(envInfo().number()); }
+    EVMSchedule const& evmSchedule() const override final { return m_sealEngine.evmSchedule(envInfo().number()); }
 
     State const& state() const { return m_s; }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash(u256 _number) final;
 
-    virtual bool getObjectProperty(const std::string&, dev::bytes&) override { return false; };
+    bool getObjectProperty(const std::string& location, dev::bytes& result) override { return m_s.getObjectProperty(location, result); }
 
-	virtual u256 balance(Address const&, const std::string&) override { return 0; };
+	u256 balance(Address const& _a, const std::string& _assetId) override { return m_s.balance(_a, _assetId); }
 
-	virtual u256 getCallIdAsset() override { return 0; };
+	u256 getCallIdAsset() override { return callIdAsset; }
 
-protected:
+private:
     State& m_s;  ///< A reference to the base state.
     SealEngineFace const& m_sealEngine;
+	u256 callIdAsset;
 };
 
 }

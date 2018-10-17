@@ -34,6 +34,7 @@ struct EVMSchedule
     bool eip150Mode = false;
     bool eip158Mode = false;
     bool eip1283Mode = false;
+    bool exeBlockMode = false;
     bool haveBitwiseShifting = false;
     bool haveRevert = false;
     bool haveReturnData = false;
@@ -140,6 +141,13 @@ static const EVMSchedule ConstantinopleSchedule = []
     schedule.haveExtcodehash = true;
     schedule.eip1283Mode = true;
     schedule.blockRewardOverwrite = {2 * ether};
+    return schedule;
+}();
+
+static const EVMSchedule ExeBlockSchedule = []
+{
+    EVMSchedule schedule = ByzantiumSchedule;
+    schedule.exeBlockMode = true;
     return schedule;
 }();
 
